@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "해피야나비야",
+    "slug": "happyandnavi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/images/icon.png",
+    "scheme": "happyandnavi",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./src/assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF3E0"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.happyandnavi.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "추억일기에 사진을 업로드하기 위해 갤러리 접근 권한이 필요합니다.",
+        "NSCameraUsageDescription": "추억일기에 사진을 찍기 위해 카메라 접근 권한이 필요합니다.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["kakao{KAKAO_NATIVE_APP_KEY}"]
+          }
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/images/adaptive-icon.png",
+        "backgroundColor": "#FAF3E0"
+      },
+      "package": "com.happyandnavi.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./src/assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "추억일기에 사진을 업로드하기 위해 갤러리 접근 권한이 필요합니다.",
+          "cameraPermission": "추억일기에 사진을 찍기 위해 카메라 접근 권한이 필요합니다."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}
