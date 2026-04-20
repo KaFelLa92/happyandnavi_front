@@ -4,12 +4,9 @@
     "slug": "happyandnavi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/images/icon.png",
-    "scheme": "happyandnavi",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./src/assets/images/splash.png",
-      "resizeMode": "contain",
       "backgroundColor": "#FAF3E0"
     },
     "assetBundlePatterns": [
@@ -19,46 +16,25 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.happyandnavi.app",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "추억일기에 사진을 업로드하기 위해 갤러리 접근 권한이 필요합니다.",
-        "NSCameraUsageDescription": "추억일기에 사진을 찍기 위해 카메라 접근 권한이 필요합니다.",
-        "CFBundleURLTypes": [
-          {
-            "CFBundleURLSchemes": ["kakao{KAKAO_NATIVE_APP_KEY}"]
-          }
-        ]
+        "NSCameraUsageDescription": "반려동물 사진을 촬영하기 위해 카메라 접근이 필요합니다.",
+        "NSPhotoLibraryUsageDescription": "반려동물 사진을 선택하기 위해 사진첩 접근이 필요합니다."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/images/adaptive-icon.png",
         "backgroundColor": "#FAF3E0"
       },
       "package": "com.happyandnavi.app",
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
       ]
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./src/assets/images/favicon.png"
-    },
+    "scheme": "happyandnavi",
     "plugins": [
-      "expo-secure-store",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "추억일기에 사진을 업로드하기 위해 갤러리 접근 권한이 필요합니다.",
-          "cameraPermission": "추억일기에 사진을 찍기 위해 카메라 접근 권한이 필요합니다."
-        }
-      ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "your-project-id"
-      }
-    }
+      "@react-native-community/datetimepicker",
+      "expo-secure-store"
+    ]
   }
 }

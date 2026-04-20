@@ -20,17 +20,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Colors } from '../../../constants/colors';
+import { Colors } from '@constants/colors';
 import {
   FontSize,
   FontWeight,
   Spacing,
   BorderRadius,
   Shadow,
-} from '../../../constants/typography';
-import { LoadingSpinner, Card } from '../../../components/common';
-import { getCalendarData, getTodayPromises } from '../../../services/promiseService';
-import { PromiseCalendarItem, Promise as PromiseType } from '../../../types';
+} from '@constants/typography';
+import { LoadingSpinner, Card } from '@components/common';
+import { getCalendarData, getTodayPromises } from '@services/promiseService';
+import { PromiseCalendarItem, Promise as PromiseType } from '@types';
 
 const { width } = Dimensions.get('window');
 const CELL_SIZE = (width - Spacing.lg * 2 - Spacing.xs * 6) / 7;

@@ -16,8 +16,8 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { Colors } from '../../../constants/colors';
-import { FontSize, FontWeight, Spacing } from '../../../constants/typography';
+import { Colors } from '@constants/colors';
+import { FontSize, FontWeight, Spacing } from '@constants/typography';
 
 const { width } = Dimensions.get('window');
 

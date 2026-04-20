@@ -28,16 +28,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../../constants/colors';
+import { Colors } from '@constants/colors';
 import {
   FontSize,
   FontWeight,
   Spacing,
   BorderRadius,
-} from '../../../constants/typography';
-import { Button, Input } from '../../../components/common';
-import { useAuth } from '../../../context/AuthContext';
-import { AuthStackParamList } from '../../../types';
+} from '@constants/typography';
+import { Button, Input } from '@components/common';
+import { useAuth } from '@context/AuthContext';
+import { AuthStackParamList } from '@types';
 
 // ============================================
 // 타입 정의

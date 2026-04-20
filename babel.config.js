@@ -9,9 +9,7 @@ module.exports = function(api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      // React Native Reanimated 플러그인 (애니메이션용)
-      'react-native-reanimated/plugin',
-      // 모듈 경로 별칭 설정
+      // 1. 모듈 경로 별칭 설정
       [
         'module-resolver',
         {
@@ -25,6 +23,7 @@ module.exports = function(api) {
             '@utils': './src/utils',
             '@hooks': './src/hooks',
             '@context': './src/context',
+            '@types': './src/types',
             '@assets': './src/assets',
             '@styles': './src/styles',
             '@constants': './src/constants',
@@ -32,6 +31,10 @@ module.exports = function(api) {
           },
         },
       ],
+      // 2. Worklets 플러그인 추가 (Reanimated 최신 버전 호환용)
+      'react-native-worklets-core/plugin',
+      // 3. Reanimated 플러그인은 "반드시" 마지막에 위치해야 함
+      'react-native-reanimated/plugin',
     ],
   };
 };
