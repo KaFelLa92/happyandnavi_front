@@ -47,6 +47,7 @@ import { HomeScreen } from '../screens/main/HomeScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
 import { MemoryCalendarScreen } from '../screens/memory/MemoryCalendarScreen';
 import { PromiseCalendarScreen } from '../screens/promise/PromiseCalendarScreen';
+import { PromiseCreateScreen } from '../screens/promise/PromiseCreateScreen';
 
 // ============================================
 // 네비게이터 생성
@@ -91,10 +92,9 @@ const MemoryStackNavigator: React.FC = () => {
       }}
     >
       <MemoryStack.Screen name="MemoryCalendar" component={MemoryCalendarScreen} />
-      {/* TODO: 추가 화면들 */}
-      {/* <MemoryStack.Screen name="MemoryDetail" component={MemoryDetailScreen} /> */}
-      {/* <MemoryStack.Screen name="MemoryCreate" component={MemoryCreateScreen} /> */}
-      {/* <MemoryStack.Screen name="MemoryEdit" component={MemoryEditScreen} /> */}
+      <MemoryStack.Screen name="MemoryDetail" component={MemoryDetailScreen} />
+      <MemoryStack.Screen name="MemoryCreate" component={MemoryCreateScreen} />
+      <MemoryStack.Screen name="MemoryEdit" component={MemoryEditScreen} />
     </MemoryStack.Navigator>
   );
 };
@@ -110,11 +110,10 @@ const PromiseStackNavigator: React.FC = () => {
         headerShown: false,
       }}
     >
-      <PromiseStack.Screen name="PromiseCalendar" component={PromiseCalendarScreen} />
-      {/* TODO: 추가 화면들 */}
-      {/* <PromiseStack.Screen name="PromiseDetail" component={PromiseDetailScreen} /> */}
-      {/* <PromiseStack.Screen name="PromiseCreate" component={PromiseCreateScreen} /> */}
-      {/* <PromiseStack.Screen name="PromiseEdit" component={PromiseEditScreen} /> */}
+    <PromiseStack.Screen name="PromiseCalendar" component={PromiseCalendarScreen} />
+      <PromiseStack.Screen name="PromiseDetail" component={PromiseDetailScreen} />
+      <PromiseStack.Screen name="PromiseCreate" component={PromiseCreateScreen} />
+      <PromiseStack.Screen name="PromiseEdit" component={PromiseEditScreen} />
     </PromiseStack.Navigator>
   );
 };
