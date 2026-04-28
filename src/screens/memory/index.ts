@@ -5,3 +5,4 @@
  */
 
 export * from './MemoryCalendarScreen';
+export * from './MemoryCreateScreen';
