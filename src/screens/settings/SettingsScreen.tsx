@@ -173,7 +173,7 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
             <Text style={styles.avatarEmoji}>🐾</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.userName || '반려동물'}</Text>
+            <Text style={styles.profileName}>{user?.petName || '반려동물'}</Text>
             <Text style={styles.profileEmail}>{user?.email}</Text>
             <View style={styles.signupTypeBadge}>
               <Text style={styles.signupTypeText}>

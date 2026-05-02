@@ -47,7 +47,7 @@ export const getMyInfo = async (): Promise<User> => {
  * 사용자 정보 수정 요청 타입
  */
 interface UpdateUserRequest {
-  userName?: string;
+  petName?: string;
   phone?: string;
 }
 
@@ -73,6 +73,44 @@ export const updateMyInfo = async (request: UpdateUserRequest): Promise<User> =>
     throw new Error(response.message || '정보 수정에 실패했습니다.');
   } catch (error: any) {
     debugLog('사용자 정보 수정 실패:', error.message);
+    throw error;
+  }
+};
+
+/**
+ * 반려동물 프로필 사진 업로드
+ *
+ * @param formData - 이미지 파일이 담긴 FormData
+ * @returns 수정된 사용자 정보
+ */
+export const uploadPetPhoto = async (formData: FormData): Promise<User> => {
+  try {
+    debugLog('반려동물 사진 업로드 시도');
+
+    if (!accessToken) {
+          throw new Error('인증 토큰이 없습니다.');
+        }
+
+        // 순정 fetch 사용 (Content-Type 자동 설정)
+        const response = await fetch(`${API_BASE_URL}/api/users/me/pet-photo`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: formData,
+        });
+
+    const result = await response.json();
+
+    if (response.ok && result.success && result.data) {
+      await saveUserInfo(result.data); // 로컬 저장소 갱신
+      debugLog('사진 업로드 완료');
+      return result.data;
+    }
+
+    throw new Error(result.message || '사진 업로드에 실패했습니다.');
+  } catch (error: any) {
+    debugLog('사진 업로드 실패:', error.message);
     throw error;
   }
 };

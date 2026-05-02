@@ -32,8 +32,7 @@
  export const PromiseEditScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
    const original: PromiseType = route.params.promise;
    const [title, setTitle] = useState(original.promiseTitle || '');
-   const [memo, setMemo] = useState(original.promiseMemo || '');
-   const [location, setLocation] = useState(original.promiseLocation || '');
+   const [memo, setMemo] = useState(original.promiseComment || '');
    const [allDay, setAllDay] = useState(!!original.allDay);
    const [startDate, setStartDate] = useState(
      original.promiseStart ? parseISO(original.promiseStart) : new Date()
@@ -52,8 +51,7 @@
        setIsLoading(true);
        await updatePromise(original.promiseId, {
          promiseTitle: title,
-         promiseMemo: memo,
-         promiseLocation: location,
+         promiseComment: memo,
          allDay: allDay ? 1 : 0,
          promiseStart: startDate.toISOString(),
          promiseEnd: endDate.toISOString(),
@@ -86,7 +84,6 @@
 
        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
          <Input label="제목" placeholder="약속 제목" value={title} onChangeText={setTitle} />
-         <Input label="장소" placeholder="장소 (선택)" value={location} onChangeText={setLocation} />
 
          <View style={styles.row}>
            <Text style={styles.label}>종일</Text>

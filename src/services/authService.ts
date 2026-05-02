@@ -47,7 +47,7 @@ export const login = async (request: LoginRequest): Promise<LoginResponse> => {
       await saveUserInfo({
         userId: response.data.userId,
         email: response.data.email,
-        userName: response.data.userName,
+        petName: response.data.petName,
       } as User);
       
       debugLog('로그인 성공:', response.data.userId);
@@ -203,7 +203,7 @@ export const kakaoLogin = async (accessToken: string): Promise<LoginResponse> =>
       await saveUserInfo({
         userId: response.data.userId,
         email: response.data.email,
-        userName: response.data.userName,
+        petName: response.data.petName,
       } as User);
       
       debugLog('카카오 로그인 성공');
@@ -239,7 +239,7 @@ export const googleLogin = async (idToken: string): Promise<LoginResponse> => {
       await saveUserInfo({
         userId: response.data.userId,
         email: response.data.email,
-        userName: response.data.userName,
+        petName: response.data.petName,
       } as User);
       
       debugLog('구글 로그인 성공');

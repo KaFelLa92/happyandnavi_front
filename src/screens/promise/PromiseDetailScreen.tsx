@@ -106,20 +106,10 @@
            </View>
          </View>
 
-         {!!promise?.promiseLocation && (
-           <View style={styles.infoRow}>
-             <Ionicons name="location-outline" size={20} color={Colors.primary} style={styles.infoIcon} />
-             <View>
-               <Text style={styles.infoLabel}>장소</Text>
-               <Text style={styles.infoValue}>{promise.promiseLocation}</Text>
-             </View>
-           </View>
-         )}
-
-         {!!promise?.promiseMemo && (
+         {!!promise?.promiseComment && (
            <View style={styles.memoBox}>
              <Text style={styles.infoLabel}>메모</Text>
-             <Text style={styles.memoText}>{promise.promiseMemo}</Text>
+             <Text style={styles.memoText}>{promise.promiseComment}</Text>
            </View>
          )}
        </ScrollView>

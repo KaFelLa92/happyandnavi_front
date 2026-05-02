@@ -22,7 +22,7 @@
 
  export const MemoryEditScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
    const memory: Memory = route.params.memory;
-   const [content, setContent] = useState(memory.memoryContent || '');
+   const [content, setContent] = useState(memory.memoryComment || '');
    const [imageUri, setImageUri] = useState<string | null>(null);
    const [isLoading, setIsLoading] = useState(false);
 
@@ -43,7 +43,7 @@
      if (!content.trim()) { Alert.alert('알림', '내용을 입력해주세요.'); return; }
      try {
        setIsLoading(true);
-       await updateMemory(memory.memoryId, { memoryContent: content }, imageUri || undefined);
+       await updateMemory(memory.memoryId, { memoryComment: content }, imageUri || undefined);
        Alert.alert('완료', '수정되었습니다.', [
          { text: '확인', onPress: () => navigation.goBack() },
        ]);
@@ -54,7 +54,7 @@
      }
    };
 
-   const displayUri = imageUri || memory.imageUrl;
+   const displayUri = imageUri || memory.memoryUrl;
 
    return (
      <SafeAreaView style={styles.container}>

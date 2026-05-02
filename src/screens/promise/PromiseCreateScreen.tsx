@@ -32,7 +32,6 @@ export const PromiseCreateScreen: React.FC<{ navigation: any; route: any }> = ({
   const initDate = route.params?.date ? new Date(route.params.date) : new Date();
   const [title, setTitle] = useState('');
   const [memo, setMemo] = useState('');
-  const [location, setLocation] = useState('');
   const [allDay, setAllDay] = useState(false);
   const [startDate, setStartDate] = useState(initDate);
   const [endDate, setEndDate] = useState(initDate);
@@ -47,8 +46,7 @@ export const PromiseCreateScreen: React.FC<{ navigation: any; route: any }> = ({
       setIsLoading(true);
       await createPromise({
         promiseTitle: title,
-        promiseMemo: memo,
-        promiseLocation: location,
+        promiseComment: memo,
         allDay: allDay ? 1 : 0,
         promiseStart: startDate.toISOString(),
         promiseEnd: endDate.toISOString(),
@@ -81,7 +79,6 @@ export const PromiseCreateScreen: React.FC<{ navigation: any; route: any }> = ({
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Input label="제목" placeholder="약속 제목" value={title} onChangeText={setTitle} />
-        <Input label="장소" placeholder="장소 (선택)" value={location} onChangeText={setLocation} />
 
         <View style={styles.row}>
           <Text style={styles.label}>종일</Text>

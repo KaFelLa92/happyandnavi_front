@@ -44,7 +44,7 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
     if (!content.trim()) { Alert.alert('알림', '내용을 입력해주세요.'); return; }
     try {
       setIsLoading(true);
-      await createMemory({ memoryDate: initialDate, memoryContent: content }, imageUri);
+      await createMemory({ memoryDate: initialDate, memoryComment: content }, imageUri);
       Alert.alert('완료', '추억일기가 저장되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);

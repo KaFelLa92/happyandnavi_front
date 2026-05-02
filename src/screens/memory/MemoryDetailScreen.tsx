@@ -83,12 +83,12 @@
        </View>
 
        <ScrollView showsVerticalScrollIndicator={false}>
-         {memory?.imageUrl && (
-           <Image source={{ uri: memory.imageUrl }} style={styles.image} resizeMode="cover" />
+         {memory?.memoryUrl && (
+           <Image source={{ uri: memory.memoryUrl }} style={styles.image} resizeMode="cover" />
          )}
          <View style={styles.content}>
            <Text style={styles.date}>{memory?.memoryDate}</Text>
-           <Text style={styles.body}>{memory?.memoryContent}</Text>
+           <Text style={styles.body}>{memory?.memoryComment}</Text>
          </View>
        </ScrollView>
      </SafeAreaView>

@@ -189,7 +189,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const user: User = {
         userId: response.userId,
         email: response.email,
-        userName: response.userName,
+        petName: response.petName,
         scheduleSet: 1,
         signupType: 1,
         signupTypeText: '일반',
@@ -267,7 +267,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const user: User = {
         userId: response.userId,
         email: response.email,
-        userName: response.userName,
+        petName: response.petName,
         scheduleSet: 1,
         signupType: 2,
         signupTypeText: '카카오',
@@ -299,7 +299,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const user: User = {
         userId: response.userId,
         email: response.email,
-        userName: response.userName,
+        petName: response.petName,
         scheduleSet: 1,
         signupType: 3,
         signupTypeText: '구글',

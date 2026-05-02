@@ -17,7 +17,8 @@ export interface User {
   userId: number;
   email: string;
   phone?: string;
-  userName: string;
+  petName: string;
+  petPhotoPath?: string;
   scheduleSet: number;
   signupType: number;
   signupTypeText: string;
@@ -32,7 +33,7 @@ export interface SignupRequest {
   password: string;
   passwordConfirm: string;
   phone: string;
-  userName: string;
+  petName: string;
 }
 
 /**
@@ -52,7 +53,7 @@ export interface LoginResponse {
   tokenType: string;
   expiresIn: number;
   userId: number;
-  userName: string;
+  petName: string;
   email: string;
 }
 

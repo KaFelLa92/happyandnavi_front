@@ -56,7 +56,7 @@ interface FormData {
   password: string;
   passwordConfirm: string;
   phone: string;
-  userName: string;
+  petName: string;
 }
 
 interface FormErrors {
@@ -64,7 +64,7 @@ interface FormErrors {
   password?: string;
   passwordConfirm?: string;
   phone?: string;
-  userName?: string;
+  petName?: string;
 }
 
 // ============================================
@@ -81,7 +81,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
     password: '',
     passwordConfirm: '',
     phone: '',
-    userName: '',
+    petName: '',
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -184,10 +184,10 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
     }
 
     // 반려동물 이름
-    if (!formData.userName.trim()) {
-      newErrors.userName = '반려동물 이름을 입력해주세요.';
-    } else if (formData.userName.length > 30) {
-      newErrors.userName = '이름은 30자를 초과할 수 없습니다.';
+    if (!formData.petName.trim()) {
+      newErrors.petName = '반려동물 이름을 입력해주세요.';
+    } else if (formData.petName.length > 30) {
+      newErrors.petName = '이름은 30자를 초과할 수 없습니다.';
     }
 
     setErrors(newErrors);
@@ -209,7 +209,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
         password: formData.password,
         passwordConfirm: formData.passwordConfirm,
         phone: formData.phone.replace(/-/g, ''),
-        userName: formData.userName.trim(),
+        petName: formData.petName.trim(),
       });
 
       Alert.alert(
@@ -335,10 +335,10 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
             <Input
               label="반려동물 이름"
               placeholder="우리 아이 이름을 알려주세요 🐶🐱"
-              value={formData.userName}
-              onChangeText={(value) => handleChange('userName', value)}
+              value={formData.petName}
+              onChangeText={(value) => handleChange('petName', value)}
               leftIcon="heart-outline"
-              error={errors.userName}
+              error={errors.petName}
             />
 
             {/* 회원가입 버튼 */}

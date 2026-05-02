@@ -26,7 +26,7 @@
  * - https://api.happyandnavi.com 등 실제 도메인 사용
  */
 export const API_BASE_URL = __DEV__ 
-  ? 'http://10.0.2.2:8080'  // Android 에뮬레이터용 (iOS는 localhost 사용)
+  ? 'http://192.168.200.100'  // 실제 스마트폰 및 에뮬레이터 공용
   : 'https://api.happyandnavi.com';
 
 /**
