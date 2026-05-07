@@ -9,41 +9,85 @@
  import React, { useState } from 'react';
  import {
    View, Text, StyleSheet, TouchableOpacity,
-   ScrollView, Image, Alert, ActivityIndicator,
+   ScrollView, Alert, ActivityIndicator,
  } from 'react-native';
  import { SafeAreaView } from 'react-native-safe-area-context';
  import { Ionicons } from '@expo/vector-icons';
- import * as ImagePicker from 'expo-image-picker';
  import { Colors } from '@constants/colors';
  import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
  import { Input } from '@components/common';
  import { updateMemory } from '@services/memoryService';
  import { Memory } from '@types';
 
+ const WEATHER_OPTIONS = [
+   { code: 1, label: '맑음',  emoji: '☀️' },
+   { code: 2, label: '흐림',  emoji: '☁️' },
+   { code: 3, label: '비',    emoji: '🌧️' },
+   { code: 4, label: '눈',    emoji: '❄️' },
+   { code: 5, label: '바람',  emoji: '💨' },
+ ];
+ const MOOD_OPTIONS = [
+   { code: 1, label: '매우 좋음', emoji: '😄' },
+   { code: 2, label: '좋음',     emoji: '🙂' },
+   { code: 3, label: '보통',     emoji: '😐' },
+   { code: 4, label: '나쁨',     emoji: '😟' },
+   { code: 5, label: '매우 나쁨', emoji: '😢' },
+ ];
+
+ // ============================================
+ // 칩 그룹 공용 컴포넌트
+ // ============================================
+ const ChipGroup: React.FC<{
+   label: string;
+   options: { code: number; label: string; emoji: string }[];
+   value: number | undefined;
+   onChange: (v: number | undefined) => void;
+ }> = ({ label, options, value, onChange }) => (
+   <View style={styles.chipGroupWrap}>
+     <Text style={styles.fieldLabel}>{label}</Text>
+     <View style={styles.chipRow}>
+       {options.map(opt => {
+         const selected = value === opt.code;
+         return (
+           <TouchableOpacity
+             key={opt.code}
+             style={[styles.chip, selected && styles.chipSelected]}
+             onPress={() => onChange(selected ? undefined : opt.code)}
+             activeOpacity={0.8}
+           >
+             <Text style={styles.chipEmoji}>{opt.emoji}</Text>
+             <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
+               {opt.label}
+             </Text>
+           </TouchableOpacity>
+         );
+       })}
+     </View>
+   </View>
+ );
+
+ // ============================================
+ // 메인 컴포넌트
+ // ============================================
  export const MemoryEditScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
    const memory: Memory = route.params.memory;
-   const [content, setContent] = useState(memory.memoryComment || '');
-   const [imageUri, setImageUri] = useState<string | null>(null);
-   const [isLoading, setIsLoading] = useState(false);
 
-   const pickImage = async () => {
-     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-     if (status !== 'granted') {
-       Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
-       return;
-     }
-     const result = await ImagePicker.launchImageLibraryAsync({
-       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-       quality: 0.8,
-     });
-     if (!result.canceled && result.assets[0]) setImageUri(result.assets[0].uri);
-   };
+   const [content,  setContent]  = useState(memory.memoryComment || '');
+   const [weather,  setWeather]  = useState<number | undefined>(memory.memoryWeather ?? undefined);
+   const [userMood, setUserMood] = useState<number | undefined>(memory.userMood ?? undefined);
+   const [petMood,  setPetMood]  = useState<number | undefined>(memory.petMood ?? undefined);
+   const [isLoading, setIsLoading] = useState(false);
 
    const handleSave = async () => {
      if (!content.trim()) { Alert.alert('알림', '내용을 입력해주세요.'); return; }
      try {
        setIsLoading(true);
-       await updateMemory(memory.memoryId, { memoryComment: content }, imageUri || undefined);
+       await updateMemory(memory.memoryId, {
+         memoryComment: content,
+         memoryWeather: weather,
+         userMood,
+         petMood,
+       });
        Alert.alert('완료', '수정되었습니다.', [
          { text: '확인', onPress: () => navigation.goBack() },
        ]);
@@ -54,10 +98,9 @@
      }
    };
 
-   const displayUri = imageUri || memory.memoryUrl;
-
    return (
      <SafeAreaView style={styles.container}>
+       {/* 헤더 */}
        <View style={styles.header}>
          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
@@ -72,24 +115,10 @@
        </View>
 
        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-         <Text style={styles.dateLabel}>{memory.memoryDate}</Text>
+         {/* 날짜 표시 (수정 불가) */}
+         <Text style={styles.dateLabel}>{memory.memoryDate?.toString()}</Text>
 
-         <TouchableOpacity style={styles.imagePicker} onPress={pickImage} activeOpacity={0.8}>
-           {displayUri ? (
-             <View>
-               <Image source={{ uri: displayUri }} style={styles.selectedImage} resizeMode="cover" />
-               <View style={styles.imageOverlay}>
-                 <Ionicons name="camera-outline" size={24} color="#fff" />
-               </View>
-             </View>
-           ) : (
-             <View style={styles.imagePlaceholder}>
-               <Ionicons name="camera-outline" size={40} color={Colors.textHint} />
-               <Text style={styles.imagePlaceholderText}>사진 변경</Text>
-             </View>
-           )}
-         </TouchableOpacity>
-
+         {/* 본문 (수정 가능) */}
          <Input
            multiline
            numberOfLines={8}
@@ -98,6 +127,31 @@
            onChangeText={setContent}
            style={styles.textInput}
            containerStyle={styles.inputContainer}
+           maxLength={200}
+         />
+
+         {/* 날씨 */}
+         <ChipGroup
+           label="날씨"
+           options={WEATHER_OPTIONS}
+           value={weather}
+           onChange={setWeather}
+         />
+
+         {/* 내 기분 */}
+         <ChipGroup
+           label="내 기분"
+           options={MOOD_OPTIONS}
+           value={userMood}
+           onChange={setUserMood}
+         />
+
+         {/* 반려동물 기분 */}
+         <ChipGroup
+           label="반려동물 기분"
+           options={MOOD_OPTIONS}
+           value={petMood}
+           onChange={setPetMood}
          />
        </ScrollView>
      </SafeAreaView>
@@ -113,28 +167,35 @@
    headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
    headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
    saveText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.primary },
-   scrollContent: { padding: Spacing.lg },
+   scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
    dateLabel: {
      fontSize: FontSize.md, color: Colors.textSecondary,
      marginBottom: Spacing.md, textAlign: 'center',
    },
-   imagePicker: {
-     width: '100%', height: 220, borderRadius: BorderRadius.xl,
-     overflow: 'hidden', marginBottom: Spacing.lg, ...Shadow.sm,
-   },
-   selectedImage: { width: '100%', height: '100%' },
-   imageOverlay: {
-     position: 'absolute', bottom: 12, right: 12,
-     backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 8,
-   },
-   imagePlaceholder: {
-     flex: 1, backgroundColor: Colors.surfaceLight, justifyContent: 'center',
-     alignItems: 'center', borderWidth: 2, borderStyle: 'dashed',
-     borderColor: Colors.border, borderRadius: BorderRadius.xl,
-   },
-   imagePlaceholderText: { marginTop: Spacing.sm, fontSize: FontSize.md, color: Colors.textHint },
-   inputContainer: { marginBottom: 0 },
+   inputContainer: { marginBottom: Spacing.lg },
    textInput: { height: 160, textAlignVertical: 'top' },
+
+   // 칩 스타일
+   chipGroupWrap: { marginBottom: Spacing.lg },
+   fieldLabel: {
+     fontSize: FontSize.sm, fontWeight: FontWeight.medium,
+     color: Colors.textSecondary, marginBottom: Spacing.sm,
+   },
+   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+   chip: {
+     flexDirection: 'row', alignItems: 'center', gap: 4,
+     paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
+     borderRadius: BorderRadius.full,
+     backgroundColor: Colors.surfaceLight,
+     borderWidth: 1, borderColor: Colors.border,
+   },
+   chipSelected: {
+     backgroundColor: Colors.primaryLight,
+     borderColor: Colors.primary,
+   },
+   chipEmoji: { fontSize: 15 },
+   chipLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
+   chipLabelSelected: { color: Colors.primary, fontWeight: FontWeight.semibold },
  });
 
  export default MemoryEditScreen;

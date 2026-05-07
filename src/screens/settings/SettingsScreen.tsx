@@ -12,9 +12,14 @@
  * - 알림 설정
  * - 로그아웃
  * - 회원 탈퇴
+ * 260502 변경:
+ *   - 프로필 사진 업로드 UI 추가 (탭 → 갤러리에서 선택 → 업로드)
+ *   - user.petPhotoUrl 이 있으면 이미지로, 없으면 이모지로 폴백
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { Platform
+} from 'react-native';
 import {
   View,
   Text,
@@ -23,9 +28,12 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@constants/colors';
 import {
   FontSize,
@@ -35,7 +43,7 @@ import {
   Shadow,
 } from '@constants/typography';
 import { useAuth } from '@context/AuthContext';
-import { updateNotificationSettings } from '@services/userService';
+import { updateNotificationSettings, uploadPetPhoto } from '@services/userService';
 import { Card } from '@components/common';
 
 // ============================================
@@ -47,6 +55,7 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
   const [notificationEnabled, setNotificationEnabled] = useState(
     user?.scheduleSet === 1
   );
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // ========================================
   // 알림 설정 토글
@@ -56,19 +65,52 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
     try {
       setNotificationEnabled(value);
       await updateNotificationSettings(value ? 1 : 0);
-      
+
       if (user) {
         updateUser({ ...user, scheduleSet: value ? 1 : 0 });
       }
     } catch (error) {
-      // 실패 시 롤백
       setNotificationEnabled(!value);
       Alert.alert('오류', '설정 변경에 실패했습니다.');
     }
   };
 
   // ========================================
-  // 로그아웃
+  // 프로필 사진 업로드 (260502 신규)
+  // ========================================
+
+  const handlePickPetPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
+        return;
+      }
+
+      const mediaTypes: any =
+        (ImagePicker as any).MediaType?.Images ?? ImagePicker.MediaTypeOptions.Images;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes,
+        allowsEditing: Platform.OS === 'ios',
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setIsUploadingPhoto(true);
+      const updatedUser = await uploadPetPhoto(result.assets[0].uri);
+      updateUser(updatedUser);
+      Alert.alert('완료', '프로필 사진이 업데이트되었습니다.');
+    } catch (e: any) {
+      Alert.alert('오류', e.message || '사진 업로드에 실패했습니다.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  // ========================================
+  // 로그아웃 / 회원 탈퇴
   // ========================================
 
   const handleLogout = () => {
@@ -80,17 +122,11 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
         {
           text: '로그아웃',
           style: 'destructive',
-          onPress: async () => {
-            await logout();
-          },
+          onPress: async () => { await logout(); },
         },
       ]
     );
   };
-
-  // ========================================
-  // 회원 탈퇴
-  // ========================================
 
   const handleDeleteAccount = () => {
     navigation.navigate('DeleteAccount');
@@ -110,12 +146,7 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
   }
 
   const MenuItem: React.FC<MenuItemProps> = ({
-    icon,
-    title,
-    subtitle,
-    onPress,
-    rightElement,
-    danger = false,
+    icon, title, subtitle, onPress, rightElement, danger = false,
   }) => (
     <TouchableOpacity
       style={styles.menuItem}
@@ -124,23 +155,15 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
       activeOpacity={onPress ? 0.7 : 1}
     >
       <View style={[styles.menuIconContainer, danger && styles.menuIconDanger]}>
-        <Ionicons
-          name={icon}
-          size={20}
-          color={danger ? Colors.error : Colors.primary}
-        />
+        <Ionicons name={icon} size={20} color={danger ? Colors.error : Colors.primary} />
       </View>
       <View style={styles.menuContent}>
-        <Text style={[styles.menuTitle, danger && styles.menuTitleDanger]}>
-          {title}
-        </Text>
+        <Text style={[styles.menuTitle, danger && styles.menuTitleDanger]}>{title}</Text>
         {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
       </View>
-      {rightElement || (
-        onPress && (
-          <Ionicons name="chevron-forward" size={20} color={Colors.textHint} />
-        )
-      )}
+      {rightElement || (onPress && (
+        <Ionicons name="chevron-forward" size={20} color={Colors.textHint} />
+      ))}
     </TouchableOpacity>
   );
 
@@ -150,12 +173,9 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ======== 헤더 ======== */}
+      {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>설정</Text>
@@ -167,11 +187,27 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* ======== 프로필 카드 ======== */}
+        {/* 프로필 카드 (사진 업로드 가능) */}
         <Card style={styles.profileCard}>
-          <View style={styles.profileAvatar}>
-            <Text style={styles.avatarEmoji}>🐾</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.profileAvatar}
+            onPress={handlePickPetPhoto}
+            activeOpacity={0.8}
+            disabled={isUploadingPhoto}
+          >
+            {isUploadingPhoto ? (
+              <ActivityIndicator color={Colors.primary} />
+            ) : user?.petPhotoUrl ? (
+              <Image source={{ uri: user.petPhotoUrl }} style={styles.profileImage} />
+            ) : (
+              <Text style={styles.avatarEmoji}>🐾</Text>
+            )}
+            {/* 카메라 배지 (탭 가능 표시) */}
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={14} color={Colors.white} />
+            </View>
+          </TouchableOpacity>
+
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user?.petName || '반려동물'}</Text>
             <Text style={styles.profileEmail}>{user?.email}</Text>
@@ -183,10 +219,16 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
           </View>
         </Card>
 
-        {/* ======== 계정 설정 ======== */}
+        {/* 계정 설정 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>계정 설정</Text>
           <Card style={styles.menuCard} noPadding>
+            <MenuItem
+              icon="camera-outline"
+              title="프로필 사진 변경"
+              subtitle="반려동물의 사진을 등록하세요"
+              onPress={handlePickPetPhoto}
+            />
             <MenuItem
               icon="person-outline"
               title="프로필 수정"
@@ -203,7 +245,7 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
           </Card>
         </View>
 
-        {/* ======== 앱 설정 ======== */}
+        {/* 앱 설정 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>앱 설정</Text>
           <Card style={styles.menuCard} noPadding>
@@ -223,25 +265,15 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
           </Card>
         </View>
 
-        {/* ======== 계정 관리 ======== */}
+        {/* 계정 관리 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>계정 관리</Text>
           <Card style={styles.menuCard} noPadding>
-            <MenuItem
-              icon="log-out-outline"
-              title="로그아웃"
-              onPress={handleLogout}
-            />
-            <MenuItem
-              icon="trash-outline"
-              title="회원 탈퇴"
-              onPress={handleDeleteAccount}
-              danger
-            />
+            <MenuItem icon="log-out-outline" title="로그아웃" onPress={handleLogout} />
+            <MenuItem icon="trash-outline" title="회원 탈퇴" onPress={handleDeleteAccount} danger />
           </Card>
         </View>
 
-        {/* ======== 앱 정보 ======== */}
         <View style={styles.appInfo}>
           <Text style={styles.appName}>Happy & Navi 🐾</Text>
           <Text style={styles.appVersion}>버전 1.0.0</Text>
@@ -256,154 +288,94 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
 // ============================================
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-
-  // 헤더
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   headerTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textPrimary,
+    fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary,
   },
-
-  // 콘텐츠
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
+  content: { flex: 1 },
+  scrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl },
 
   // 프로필 카드
   profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
+    flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xl,
   },
   profileAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72, height: 72, borderRadius: 36,
     backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center', alignItems: 'center',
     marginRight: Spacing.md,
+    overflow: 'visible',
   },
-  avatarEmoji: {
-    fontSize: 32,
+  profileImage: {
+    width: 72, height: 72, borderRadius: 36,
   },
-  profileInfo: {
-    flex: 1,
+  avatarEmoji: { fontSize: 32 },
+  cameraBadge: {
+    position: 'absolute',
+    right: -2, bottom: -2,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: Colors.surface,
   },
+  profileInfo: { flex: 1 },
   profileName: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
+    fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary,
   },
   profileEmail: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    marginTop: Spacing.xxs,
+    fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: Spacing.xxs,
   },
   signupTypeBadge: {
     backgroundColor: Colors.memoryPrimary,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xxs,
-    borderRadius: BorderRadius.sm,
-    alignSelf: 'flex-start',
-    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xxs,
+    borderRadius: BorderRadius.sm, alignSelf: 'flex-start', marginTop: Spacing.xs,
   },
   signupTypeText: {
-    fontSize: FontSize.xs,
-    color: Colors.textPrimary,
-    fontWeight: FontWeight.medium,
+    fontSize: FontSize.xs, color: Colors.textPrimary, fontWeight: FontWeight.medium,
   },
 
   // 섹션
-  section: {
-    marginBottom: Spacing.xl,
-  },
+  section: { marginBottom: Spacing.xl },
   sectionTitle: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
-    marginLeft: Spacing.xs,
+    fontSize: FontSize.sm, fontWeight: FontWeight.semibold,
+    color: Colors.textSecondary, marginBottom: Spacing.sm, marginLeft: Spacing.xs,
   },
-  menuCard: {
-    overflow: 'hidden',
-  },
+  menuCard: { overflow: 'hidden' },
 
   // 메뉴 아이템
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    flexDirection: 'row', alignItems: 'center', padding: Spacing.md,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
   },
   menuIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 36, height: 36, borderRadius: 18,
     backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.md,
+    justifyContent: 'center', alignItems: 'center', marginRight: Spacing.md,
   },
-  menuIconDanger: {
-    backgroundColor: '#FFEBEE',
-  },
-  menuContent: {
-    flex: 1,
-  },
+  menuIconDanger: { backgroundColor: '#FFEBEE' },
+  menuContent: { flex: 1 },
   menuTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.medium,
-    color: Colors.textPrimary,
+    fontSize: FontSize.md, fontWeight: FontWeight.medium, color: Colors.textPrimary,
   },
-  menuTitleDanger: {
-    color: Colors.error,
-  },
+  menuTitleDanger: { color: Colors.error },
   menuSubtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    marginTop: Spacing.xxs,
+    fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: Spacing.xxs,
   },
 
-  // 앱 정보
   appInfo: {
-    alignItems: 'center',
-    marginTop: Spacing.xl,
-    paddingTop: Spacing.xl,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    alignItems: 'center', marginTop: Spacing.xl, paddingTop: Spacing.xl,
+    borderTopWidth: 1, borderTopColor: Colors.borderLight,
   },
   appName: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textPrimary,
+    fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary,
   },
   appVersion: {
-    fontSize: FontSize.sm,
-    color: Colors.textHint,
-    marginTop: Spacing.xs,
+    fontSize: FontSize.sm, color: Colors.textHint, marginTop: Spacing.xs,
   },
 });
 

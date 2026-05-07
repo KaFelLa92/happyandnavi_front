@@ -4,7 +4,9 @@
  * =========================================
  *
  * 추억일기를 등록하는 화면입니다.
- * 사진은 필수입니다.
+ * 사진은 필수, 코멘트/날씨/사용자기분/반려동물기분은 선택입니다.
+ *
+ * 260502 변경: 날씨, 사용자기분, 반려동물기분 입력 UI 추가
  */
 
 import React, { useState } from 'react';
@@ -20,10 +22,34 @@ import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/
 import { Input } from '@components/common';
 import { createMemory } from '@services/memoryService';
 
+// ============================================
+// 코드표 (PROJECT_BLUEPRINT.md 와 일치)
+// ============================================
+
+const WEATHER_OPTIONS: { code: number; label: string; emoji: string }[] = [
+  { code: 1, label: '맑음', emoji: '☀️' },
+  { code: 2, label: '흐림', emoji: '☁️' },
+  { code: 3, label: '비',   emoji: '🌧️' },
+  { code: 4, label: '눈',   emoji: '❄️' },
+  { code: 5, label: '바람', emoji: '💨' },
+];
+
+const MOOD_OPTIONS: { code: number; label: string; emoji: string }[] = [
+  { code: 1, label: '매우 좋음', emoji: '😄' },
+  { code: 2, label: '좋음',     emoji: '🙂' },
+  { code: 3, label: '보통',     emoji: '😐' },
+  { code: 4, label: '나쁨',     emoji: '😟' },
+  { code: 5, label: '매우 나쁨', emoji: '😢' },
+];
+
 export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
   const initialDate = route.params?.date || new Date().toISOString().split('T')[0];
+
   const [content, setContent] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [weather, setWeather] = useState<number | undefined>(undefined);
+  const [userMood, setUserMood] = useState<number | undefined>(undefined);
+  const [petMood, setPetMood] = useState<number | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
 
   const pickImage = async () => {
@@ -32,8 +58,11 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
       Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
       return;
     }
+    // expo-image-picker 신버전 호환: MediaType이 있으면 그것을, 아니면 MediaTypeOptions 사용
+    const mediaTypes: any =
+      (ImagePicker as any).MediaType?.Images ?? ImagePicker.MediaTypeOptions.Images;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes,
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) setImageUri(result.assets[0].uri);
@@ -44,7 +73,13 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
     if (!content.trim()) { Alert.alert('알림', '내용을 입력해주세요.'); return; }
     try {
       setIsLoading(true);
-      await createMemory({ memoryDate: initialDate, memoryComment: content }, imageUri);
+      await createMemory({
+        memoryDate: initialDate,
+        memoryComment: content,
+        memoryWeather: weather,
+        userMood,
+        petMood,
+      }, imageUri);
       Alert.alert('완료', '추억일기가 저장되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);
@@ -54,6 +89,36 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
       setIsLoading(false);
     }
   };
+
+  // 칩 셀렉터 (날씨/기분 공용)
+  const ChipGroup: React.FC<{
+    label: string;
+    options: { code: number; label: string; emoji: string }[];
+    value: number | undefined;
+    onChange: (v: number | undefined) => void;
+  }> = ({ label, options, value, onChange }) => (
+    <View style={styles.chipGroupWrap}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.chipRow}>
+        {options.map(opt => {
+          const selected = value === opt.code;
+          return (
+            <TouchableOpacity
+              key={opt.code}
+              style={[styles.chip, selected && styles.chipSelected]}
+              onPress={() => onChange(selected ? undefined : opt.code)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.chipEmoji}>{opt.emoji}</Text>
+              <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -86,12 +151,37 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
 
         <Input
           multiline
-          numberOfLines={8}
+          numberOfLines={6}
           placeholder="오늘의 추억을 기록해보세요..."
           value={content}
           onChangeText={setContent}
           style={styles.textInput}
           containerStyle={styles.inputContainer}
+          maxLength={200}
+        />
+
+        {/* 날씨 */}
+        <ChipGroup
+          label="날씨"
+          options={WEATHER_OPTIONS}
+          value={weather}
+          onChange={setWeather}
+        />
+
+        {/* 사용자 기분 */}
+        <ChipGroup
+          label="내 기분"
+          options={MOOD_OPTIONS}
+          value={userMood}
+          onChange={setUserMood}
+        />
+
+        {/* 반려동물 기분 */}
+        <ChipGroup
+          label="반려동물 기분"
+          options={MOOD_OPTIONS}
+          value={petMood}
+          onChange={setPetMood}
         />
       </ScrollView>
     </SafeAreaView>
@@ -107,7 +197,7 @@ const styles = StyleSheet.create({
   headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
   saveText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.primary },
-  scrollContent: { padding: Spacing.lg },
+  scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
   dateLabel: {
     fontSize: FontSize.md, color: Colors.textSecondary,
     marginBottom: Spacing.md, textAlign: 'center',
@@ -123,8 +213,50 @@ const styles = StyleSheet.create({
     borderColor: Colors.border, borderRadius: BorderRadius.xl,
   },
   imagePlaceholderText: { marginTop: Spacing.sm, fontSize: FontSize.md, color: Colors.textHint },
-  inputContainer: { marginBottom: 0 },
-  textInput: { height: 160, textAlignVertical: 'top' },
+  inputContainer: { marginBottom: Spacing.lg },
+  textInput: { height: 120, textAlignVertical: 'top' },
+
+  // 칩 그룹
+  chipGroupWrap: {
+    marginBottom: Spacing.lg,
+  },
+  fieldLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  chipSelected: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
+  },
+  chipEmoji: {
+    fontSize: FontSize.md,
+    marginRight: Spacing.xs,
+  },
+  chipLabel: {
+    fontSize: FontSize.sm,
+    color: Colors.textPrimary,
+  },
+  chipLabelSelected: {
+    color: Colors.primary,
+    fontWeight: FontWeight.semibold,
+  },
 });
 
 export default MemoryCreateScreen;

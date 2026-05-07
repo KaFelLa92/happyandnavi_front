@@ -1,37 +1,36 @@
 /**
- * =========================================
- * 사용자 서비스 (userService.ts)
- * =========================================
- * 
- * 사용자 정보 조회, 수정, 설정 변경 등 사용자 관련 API를 담당합니다.
- */
+     * =========================================
+     * 사용자 서비스 (userService.ts)
+     * =========================================
+     *
+     * 사용자 정보 조회, 수정, 설정 변경 등 사용자 관련 API를 담당합니다.
+     */
 
-import { API_ENDPOINTS, debugLog } from '../constants/config';
-import { get, put, del } from './api';
-import { User } from '../types';
-import { saveUserInfo } from './authService';
+    import { API_ENDPOINTS, debugLog } from '../constants/config';
+    import { get, put, del } from './api';
+    import api from './api';
+    import { User } from '../types';
+    import { saveUserInfo } from './authService';
+    import { ApiResponse } from '../types';
 
-// ============================================
-// 사용자 정보 조회
-// ============================================
+    // ============================================
+    // 사용자 정보 조회
+    // ============================================
 
-/**
- * 내 정보 조회
- * 
- * @returns 현재 로그인한 사용자 정보
- */
-export const getMyInfo = async (): Promise<User> => {
-  try {
-    debugLog('내 정보 조회');
-    
-    const response = await get<User>(API_ENDPOINTS.USER.ME);
-    
-    if (response.success && response.data) {
-      // 로컬 저장소에도 업데이트
-      await saveUserInfo(response.data);
-      return response.data;
-    }
-    
+    /**
+     * 내 정보 조회
+     *
+     * @returns 현재 로그인한 사용자 정보
+     */
+    export const getMyInfo = async (): Promise<User> => {
+      try {
+        debugLog('내 정보 조회');
+        const response = await get<User>(API_ENDPOINTS.USER.ME);
+        if (response.success && response.data) {
+          // 로컬 저장소에도 업데이트
+          await saveUserInfo(response.data);
+          return response.data;
+        }
     throw new Error(response.message || '사용자 정보를 가져올 수 없습니다.');
   } catch (error: any) {
     debugLog('내 정보 조회 실패:', error.message);
@@ -60,9 +59,7 @@ interface UpdateUserRequest {
 export const updateMyInfo = async (request: UpdateUserRequest): Promise<User> => {
   try {
     debugLog('사용자 정보 수정:', request);
-    
     const response = await put<User>(API_ENDPOINTS.USER.UPDATE, request);
-    
     if (response.success && response.data) {
       // 로컬 저장소에도 업데이트
       await saveUserInfo(response.data);
@@ -80,30 +77,40 @@ export const updateMyInfo = async (request: UpdateUserRequest): Promise<User> =>
 /**
  * 반려동물 프로필 사진 업로드
  *
- * @param formData - 이미지 파일이 담긴 FormData
- * @returns 수정된 사용자 정보
+ * @param imageUri - expo-image-picker 가 반환한 로컬 URI
+ * @returns 갱신된 사용자 정보
  */
-export const uploadPetPhoto = async (formData: FormData): Promise<User> => {
+export const uploadPetPhoto = async (imageUri: string): Promise<User> => {
   try {
-    debugLog('반려동물 사진 업로드 시도');
+    debugLog('반려동물 사진 업로드 시도:', imageUri);
 
-    if (!accessToken) {
-          throw new Error('인증 토큰이 없습니다.');
-        }
+    const formData = new FormData();
+    const filename = imageUri.split('/').pop() || 'pet.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match
+      ? `image/${match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1]}`
+      : 'image/jpeg';
 
-        // 순정 fetch 사용 (Content-Type 자동 설정)
-        const response = await fetch(`${API_BASE_URL}/api/users/me/pet-photo`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: formData,
-        });
+    formData.append('image', {
+      uri: imageUri,
+      name: filename,
+      type,
+    } as any);
 
-    const result = await response.json();
+    // axios 인스턴스 사용 → 토큰 자동 첨부, 인터셉터 동작
+    const response = await api.put<ApiResponse<User>>(
+      '/api/users/me/pet-photo',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
 
-    if (response.ok && result.success && result.data) {
-      await saveUserInfo(result.data); // 로컬 저장소 갱신
+    const result = response.data;
+    if (result.success && result.data) {
+      await saveUserInfo(result.data);
       debugLog('사진 업로드 완료');
       return result.data;
     }
@@ -174,12 +181,10 @@ export const updateNotificationSettings = async (scheduleSet: number): Promise<v
       API_ENDPOINTS.USER.SETTINGS,
       { scheduleSet }
     );
-    
     if (response.success) {
       debugLog('알림 설정 변경 완료');
       return;
     }
-    
     throw new Error(response.message || '설정 변경에 실패했습니다.');
   } catch (error: any) {
     debugLog('알림 설정 변경 실패:', error.message);
@@ -206,15 +211,12 @@ interface DeleteAccountRequest {
 export const deleteAccount = async (password?: string): Promise<void> => {
   try {
     debugLog('회원 탈퇴 시도');
-    
     // DELETE 요청에 body를 포함하기 위해 axios를 직접 사용
     const response = await del<void>(API_ENDPOINTS.USER.DELETE);
-    
     if (response.success) {
       debugLog('회원 탈퇴 완료');
       return;
     }
-    
     throw new Error(response.message || '회원 탈퇴에 실패했습니다.');
   } catch (error: any) {
     debugLog('회원 탈퇴 실패:', error.message);

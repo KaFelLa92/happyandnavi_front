@@ -20,10 +20,19 @@ import {
 // 추억일기 생성
 // ============================================
 
+// ============================================
+// FormData 헬퍼: undefined/null이 아닌 필드만 append
+// ============================================
+
+const appendIfDefined = (formData: FormData, key: string, value: any) => {
+  if (value === undefined || value === null || value === '') return;
+  formData.append(key, String(value));
+};
+
 /**
  * 추억일기 생성
  * 
- * multipart/form-data 형식으로 이미지와 함께 전송합니다.
+ * multipart/form-data 형식으로 평면 필드로 전송합니다.
  * 
  * @param request - 추억일기 데이터
  * @param imageUri - 이미지 파일 URI
@@ -36,16 +45,21 @@ export const createMemory = async (
   try {
     debugLog('추억일기 생성:', request.memoryDate);
     
-    // FormData 생성
     const formData = new FormData();
-    
-    // JSON 데이터를 Blob으로 추가
-    formData.append('data', JSON.stringify(request));
-    
-    // 이미지 파일 추가
+
+    // 평면 form 필드로 추가 (필수)
+    formData.append('memoryDate', request.memoryDate);
+
+    // 선택 필드
+    appendIfDefined(formData, 'memoryComment', request.memoryComment);
+    appendIfDefined(formData, 'memoryWeather', request.memoryWeather);
+    appendIfDefined(formData, 'userMood', request.userMood);
+    appendIfDefined(formData, 'petMood', request.petMood);
+
+    // 이미지 파일
     const filename = imageUri.split('/').pop() || 'photo.jpg';
     const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
+    const type = match ? `image/${match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1]}` : 'image/jpeg';
     
     formData.append('image', {
       uri: imageUri,
@@ -219,6 +233,7 @@ export const searchMemories = async (keyword: string): Promise<Memory[]> => {
 
 /**
  * 추억일기 수정
+ * 평면 form 필드로 전송. 이미지는 선택.
  * 
  * @param memoryId - 추억일기 ID
  * @param request - 수정할 데이터
@@ -233,17 +248,18 @@ export const updateMemory = async (
   try {
     debugLog('추억일기 수정:', memoryId);
     
-    // FormData 생성
     const formData = new FormData();
-    
-    // JSON 데이터 추가
-    formData.append('data', JSON.stringify(request));
-    
-    // 새 이미지가 있는 경우 추가
+
+    appendIfDefined(formData, 'memoryDate', request.memoryDate);
+    appendIfDefined(formData, 'memoryComment', request.memoryComment);
+    appendIfDefined(formData, 'memoryWeather', request.memoryWeather);
+    appendIfDefined(formData, 'userMood', request.userMood);
+    appendIfDefined(formData, 'petMood', request.petMood);
+
     if (imageUri) {
       const filename = imageUri.split('/').pop() || 'photo.jpg';
       const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      const type = match ? `image/${match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1]}` : 'image/jpeg';
       
       formData.append('image', {
         uri: imageUri,

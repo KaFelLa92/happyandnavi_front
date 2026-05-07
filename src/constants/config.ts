@@ -25,8 +25,9 @@
  * 운영 환경:
  * - https://api.happyandnavi.com 등 실제 도메인 사용
  */
-export const API_BASE_URL = __DEV__ 
-  ? 'http://192.168.200.100'  // 실제 스마트폰 및 에뮬레이터 공용
+
+export const API_BASE_URL = __DEV__
+  ? 'http://172.30.1.69:8080'  // 실제 스마트폰 및 에뮬레이터 공용
   : 'https://api.happyandnavi.com';
 
 /**
