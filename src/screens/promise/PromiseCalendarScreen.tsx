@@ -24,210 +24,230 @@ import {
   addMonths, subMonths, isSameDay, parseISO, isToday as dateFnsIsToday,
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Colors } from '@constants/colors';
-import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
+import { FontFamily, Spacing } from '@constants/typography';
 import { LoadingSpinner } from '@components/common';
 import { getCalendarData } from '@services/promiseService';
 import { PromiseCalendarItem } from '@types';
 
+// ============================================
+// 레이아웃 상수
+// ============================================
 const { width } = Dimensions.get('window');
-const CELL_SIZE = (width - Spacing.lg * 2 - Spacing.xs * 6) / 7;
-// 바(bar)가 최대 2개 들어가는 셀 높이
-const CELL_HEIGHT = CELL_SIZE + 20;
+const CELL_W   = (width - Spacing.lg * 2 - Spacing.lg * 2 - 10) / 7;
+const BAR_H    = 12;
+const BAR_GAP  = 2;
+const MAX_LANES = 2;
+const BAR_MARGIN = 2;
 
-// Colors.schedule 타입 안전 헬퍼
-const getScheduleColor = (key?: string | null): string => {
-  if (!key) return Colors.promisePrimary;
-  return (Colors.schedule as Record<string, string>)[key] ?? Colors.promisePrimary;
+const SCHEDULE_COLORS: Record<string, string> = {
+  blue: '#4FC3F7', green: '#81C784', orange: '#FFB74D',
+  pink: '#F48FB1', purple: '#CE93D8',
 };
+const getScheduleColor = (key?: string | null): string => SCHEDULE_COLORS[key ?? ''] ?? '#4FC3F7';
+const normalizeDate = (dt: string): string => dt.substring(0, 10);
 
-interface CalendarDay {
-  date: Date;
-  day: number;
-  isCurrentMonth: boolean;
-  promises: PromiseCalendarItem[];
+interface BarInfo {
+  promise: PromiseCalendarItem;
+  startCol: number; span: number; lane: number;
+  isActualStart: boolean; isActualEnd: boolean;
 }
 
 export const PromiseCalendarScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-
-  const [currentDate, setCurrentDate]   = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [calendarData, setCalendarData] = useState<PromiseCalendarItem[]>([]);
-  const [isLoading, setIsLoading]       = useState(true);
-
-  // 모달 상태
+  const [currentDate,   setCurrentDate]   = useState(new Date());
+  const [calendarData,  setCalendarData]  = useState<PromiseCalendarItem[]>([]);
+  const [isLoading,     setIsLoading]     = useState(true);
   const [modalVisible,  setModalVisible]  = useState(false);
   const [modalDate,     setModalDate]     = useState<Date>(new Date());
   const [modalPromises, setModalPromises] = useState<PromiseCalendarItem[]>([]);
 
-  // ========================================
-  // 데이터 로딩 (useFocusEffect)
-  // ========================================
   const loadCalendarData = useCallback(async () => {
     try {
-      const data = await getCalendarData(
-        currentDate.getFullYear(),
-        currentDate.getMonth() + 1
-      );
+      const data = await getCalendarData(currentDate.getFullYear(), currentDate.getMonth() + 1);
       setCalendarData(data);
-    } catch (err) {
-      console.error('캘린더 데이터 로딩 실패:', err);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setIsLoading(false); }
   }, [currentDate]);
 
-  useFocusEffect(
-    useCallback(() => {
-      setIsLoading(true);
-      loadCalendarData();
-    }, [loadCalendarData])
-  );
+  useFocusEffect(useCallback(() => { setIsLoading(true); loadCalendarData(); }, [loadCalendarData]));
 
-  const handlePrevMonth = () => { setCurrentDate(subMonths(currentDate, 1)); setSelectedDate(null); };
-  const handleNextMonth = () => { setCurrentDate(addMonths(currentDate, 1)); setSelectedDate(null); };
-
-  // ========================================
-  // 캘린더 데이터 생성
-  // ========================================
-  const generateCalendarDays = (): CalendarDay[] => {
+  // 주(week) 단위 분리
+  const generateWeekRows = (): (Date | null)[][] => {
     const start = startOfMonth(currentDate);
     const end   = endOfMonth(currentDate);
     const startDow = getDay(start);
+    const all: (Date | null)[] = [
+      ...Array(startDow).fill(null),
+      ...eachDayOfInterval({ start, end }),
+    ];
+    while (all.length % 7 !== 0) all.push(null);
+    const weeks: (Date | null)[][] = [];
+    for (let i = 0; i < all.length; i += 7) weeks.push(all.slice(i, i + 7));
+    return weeks;
+  };
 
-    const emptyDays: CalendarDay[] = Array(startDow).fill(null).map((_, i) => ({
-      date: new Date(start.getFullYear(), start.getMonth(), -startDow + i + 1),
-      day: -startDow + i + 1,
-      isCurrentMonth: false,
-      promises: [],
-    }));
+  const getBarsForWeek = (week: (Date | null)[]): BarInfo[] => {
+    const realDays = week.filter((d): d is Date => d !== null);
+    if (realDays.length === 0) return [];
+    const wsStr = format(realDays[0], 'yyyy-MM-dd');
+    const weStr = format(realDays[realDays.length - 1], 'yyyy-MM-dd');
 
-    const calDays: CalendarDay[] = eachDayOfInterval({ start, end }).map(date => {
-      const dateStr = format(date, 'yyyy-MM-dd');
-      const promises = calendarData.filter(item => {
-        if (!item.promiseStart) return false;
-        return format(parseISO(item.promiseStart as unknown as string), 'yyyy-MM-dd') === dateStr;
+    const raw: Omit<BarInfo, 'lane'>[] = [];
+    calendarData.forEach(item => {
+      if (!item.promiseStart) return;
+      const ps = normalizeDate(item.promiseStart as unknown as string);
+      const pe = item.promiseEnd ? normalizeDate(item.promiseEnd as unknown as string) : ps;
+      if (ps > weStr || pe < wsStr) return;
+      const cs = ps < wsStr ? wsStr : ps;
+      const ce = pe > weStr ? weStr : pe;
+      const startCol = week.findIndex(d => d && format(d, 'yyyy-MM-dd') === cs);
+      const endCol   = week.findIndex(d => d && format(d, 'yyyy-MM-dd') === ce);
+      if (startCol === -1) return;
+      const aec = endCol === -1 ? week.length - 1 : endCol;
+      raw.push({
+        promise: item, startCol, span: aec - startCol + 1,
+        isActualStart: ps >= wsStr, isActualEnd: pe <= weStr,
       });
-      return { date, day: date.getDate(), isCurrentMonth: true, promises };
     });
+    raw.sort((a, b) => a.startCol - b.startCol || b.span - a.span);
 
-    return [...emptyDays, ...calDays];
+    const laneEnd: number[] = [];
+    return raw.map(bar => {
+      let lane = 0;
+      while (laneEnd[lane] !== undefined && laneEnd[lane] >= bar.startCol) lane++;
+      laneEnd[lane] = bar.startCol + bar.span - 1;
+      return { ...bar, lane };
+    });
+  };
+
+  const getPromisesForDay = (date: Date): PromiseCalendarItem[] => {
+    const ds = format(date, 'yyyy-MM-dd');
+    return calendarData.filter(item => {
+      if (!item.promiseStart) return false;
+      const s = normalizeDate(item.promiseStart as unknown as string);
+      const e = item.promiseEnd ? normalizeDate(item.promiseEnd as unknown as string) : s;
+      return ds >= s && ds <= e;
+    });
   };
 
   // ========================================
-  // 날짜 셀 클릭 처리
-  //  - 일정 있는 날 → 모달 오픈
-  //  - 빈 날 → 두번 클릭 패턴 (등록 페이지)
+  // 모달-우선 클릭: 모든 날짜 → 모달
   // ========================================
-  const handleDayPress = (item: CalendarDay) => {
-    if (!item.isCurrentMonth) return;
-
-    if (item.promises.length > 0) {
-      setModalDate(item.date);
-      setModalPromises(item.promises);
-      setModalVisible(true);
-      return;
-    }
-
-    const alreadySelected = selectedDate && isSameDay(item.date, selectedDate);
-    if (alreadySelected) {
-      navigation.navigate('PromiseCreate', { date: format(item.date, 'yyyy-MM-dd') });
-      setSelectedDate(null);
-    } else {
-      setSelectedDate(item.date);
-    }
+  const handleDayPress = (date: Date) => {
+    const promises = getPromisesForDay(date);
+    setModalDate(date);
+    setModalPromises(promises);
+    setModalVisible(true);
   };
 
-  // ========================================
-  // 시간 포맷 헬퍼
-  // ========================================
-  const formatTime = (dt?: LocalDateTime | string | null): string => {
+  const formatTime = (dt?: string | null): string => {
     if (!dt) return '';
-    try {
-      const d = typeof dt === 'string' ? parseISO(dt) : new Date(dt as any);
-      return format(d, 'HH:mm');
-    } catch {
-      return '';
-    }
+    try { return format(parseISO(dt), 'HH:mm'); } catch { return ''; }
   };
 
   // ========================================
-  // 셀 렌더링
+  // 주 행 렌더
   // ========================================
-  const renderDayCell = (item: CalendarDay, index: number) => {
-    const { date, day, isCurrentMonth, promises } = item;
-    const todayCell  = dateFnsIsToday(date);
-    const isSelected = selectedDate && isSameDay(date, selectedDate);
-    const dow        = getDay(date);
-    const hasPromise = promises.length > 0 && isCurrentMonth;
+  const renderWeekRow = (week: (Date | null)[], wIdx: number) => {
+    const bars = getBarsForWeek(week);
+    const usedLanes = Math.min(MAX_LANES, bars.length === 0 ? 0
+      : Math.max(...bars.map(b => b.lane)) + 1);
+    const barsHeight = usedLanes * (BAR_H + BAR_GAP) + 2;
 
     return (
-      <TouchableOpacity
-        key={index}
-        style={[
-          styles.dayCell,
-          todayCell  && styles.todayCell,
-          isSelected && styles.selectedCell,
-        ]}
-        onPress={() => handleDayPress(item)}
-        disabled={!isCurrentMonth}
-        activeOpacity={0.7}
-      >
-        {/* 날짜 숫자 */}
-        <Text style={[
-          styles.dayText,
-          !isCurrentMonth && styles.inactiveDayText,
-          dow === 0 && styles.sundayText,
-          dow === 6 && styles.saturdayText,
-          todayCell  && styles.todayText,
-          isSelected && styles.selectedDayText,
-        ]}>
-          {day > 0 ? day : ''}
-        </Text>
-
-        {/* 색상 바 (최대 2개) */}
-        {hasPromise && (
-          <View style={styles.barContainer}>
-            {promises.slice(0, 2).map((p, i) => (
-              <View
-                key={i}
-                style={[styles.bar, { backgroundColor: getScheduleColor(p.promiseColor) }]}
+      <View key={wIdx} style={styles.weekRow}>
+        {/* 날짜 숫자 행 */}
+        <View style={styles.dateNumRow}>
+          {week.map((date, c) => {
+            if (!date) return <View key={c} style={styles.emptyCell} />;
+            const isToday = dateFnsIsToday(date);
+            const dow = getDay(date);
+            return (
+              <TouchableOpacity
+                key={c}
+                style={[styles.dateNumCell, isToday && styles.todayNumCell]}
+                onPress={() => handleDayPress(date)}
+                activeOpacity={0.7}
               >
-                <Text style={styles.barText} numberOfLines={1}>
-                  {(p as any).categoryEmoji ? `${(p as any).categoryEmoji} ` : ''}
-                  {p.promiseTitle}
+                <Text style={[
+                  styles.dayText,
+                  dow === 0 && { color: '#FF6B6B' },
+                  dow === 6 && { color: '#4FC3F7' },
+                  isToday && styles.todayText,
+                ]}>
+                  {date.getDate()}
                 </Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </TouchableOpacity>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* 바 영역 */}
+        <View style={[styles.barsArea, { height: barsHeight }]}>
+          {bars.filter(b => b.lane < MAX_LANES).map((bar, idx) => {
+            const color = getScheduleColor(bar.promise.promiseColor);
+            const left  = bar.startCol * CELL_W + (bar.isActualStart ? BAR_MARGIN : 0);
+            const right = (bar.startCol + bar.span) * CELL_W - (bar.isActualEnd ? BAR_MARGIN : 0);
+            const top   = bar.lane * (BAR_H + BAR_GAP);
+            return (
+              <TouchableOpacity
+                key={idx}
+                style={[
+                  styles.bar,
+                  {
+                    left, top,
+                    width: Math.max(0, right - left),
+                    backgroundColor: color,
+                    borderTopLeftRadius:    bar.isActualStart ? 6 : 0,
+                    borderBottomLeftRadius: bar.isActualStart ? 6 : 0,
+                    borderTopRightRadius:   bar.isActualEnd ? 6 : 0,
+                    borderBottomRightRadius:bar.isActualEnd ? 6 : 0,
+                  },
+                ]}
+                onPress={() => navigation.navigate('PromiseDetail', { promiseId: bar.promise.promiseId })}
+                activeOpacity={0.85}
+              >
+                {bar.isActualStart && (
+                  <Text style={styles.barText} numberOfLines={1}>
+                    {(bar.promise as any).categoryEmoji ? `${(bar.promise as any).categoryEmoji} ` : ''}
+                    {bar.promise.promiseTitle}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
     );
   };
 
   if (isLoading) return <LoadingSpinner fullScreen message="일정을 불러오는 중..." />;
 
+  const weeks = generateWeekRows();
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* 헤더 */}
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <View style={styles.titleBadge}>
-          <Text style={styles.titleText}>약속일기</Text>
-        </View>
+        <Text style={styles.headerTitle}>약속일기</Text>
       </View>
 
-      {/* 캘린더 */}
-      <View style={styles.calendarContainer}>
+      {/* 캘린더 카드 - 화면 꽉 채움 */}
+      <View style={styles.calendarCard}>
         <View style={styles.monthNav}>
-          <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => setCurrentDate(subMonths(currentDate, 1))}
+          >
+            <Ionicons name="chevron-back" size={20} color="#4A3B32" />
           </TouchableOpacity>
           <Text style={styles.monthText}>
             {format(currentDate, 'yyyy년 M월', { locale: ko })}
           </Text>
-          <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-            <Ionicons name="chevron-forward" size={24} color={Colors.textPrimary} />
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => setCurrentDate(addMonths(currentDate, 1))}
+          >
+            <Ionicons name="chevron-forward" size={20} color="#4A3B32" />
           </TouchableOpacity>
         </View>
 
@@ -235,115 +255,92 @@ export const PromiseCalendarScreen: React.FC<{ navigation: any }> = ({ navigatio
           {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
             <Text key={i} style={[
               styles.weekDayText,
-              i === 0 && styles.sundayText,
-              i === 6 && styles.saturdayText,
+              i === 0 && { color: '#FF6B6B' }, i === 6 && { color: '#4FC3F7' },
             ]}>{d}</Text>
           ))}
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <View style={styles.calendarGrid}>
-            {generateCalendarDays().map((item, index) => renderDayCell(item, index))}
-          </View>
-        </ScrollView>
+        {/* 주 단위 그리드 - flex: 1 */}
+        <View style={styles.gridContainer}>
+          {weeks.map((week, i) => renderWeekRow(week, i))}
+        </View>
       </View>
 
-      {/* + 버튼 */}
+      {/* FAB */}
       <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => navigation.navigate('PromiseCreate', {
-          date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined,
-        })}
+        style={styles.fab}
+        onPress={() => navigation.navigate('PromiseCreate', { date: format(new Date(), 'yyyy-MM-dd') })}
       >
-        <Ionicons name="add" size={28} color={Colors.textLight} />
+        <Ionicons name="add" size={28} color="#FFF" />
       </TouchableOpacity>
 
-      {/* ========================================
-          갤럭시 캘린더 스타일 바텀시트 모달
-          ======================================== */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        {/* 어두운 오버레이 — 탭하면 모달 닫기 */}
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={() => setModalVisible(false)}
-        />
+      {/* ===== 모달 (모달-우선 정책) ===== */}
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setModalVisible(false)} />
 
-        {/* 바텀시트 카드 */}
         <View style={[styles.modalCard, { paddingBottom: insets.bottom + 8 }]}>
-          {/* 헤더 드래그 핸들 */}
           <View style={styles.modalHandle} />
 
-          {/* 날짜 헤더 */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalDay}>{format(modalDate, 'd')}</Text>
-            <Text style={styles.modalWeekday}>
-              {format(modalDate, 'EEEE', { locale: ko })}
-            </Text>
+            <Text style={styles.modalWeekday}>{format(modalDate, 'EEEE', { locale: ko })}</Text>
           </View>
           <View style={styles.modalDivider} />
 
-          {/* 일정 리스트 */}
           <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-            {modalPromises.map((promise, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={styles.modalItem}
-                onPress={() => {
-                  setModalVisible(false);
-                  navigation.navigate('PromiseDetail', { promiseId: promise.promiseId });
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalItemTime}>
-                  {promise.allDay
-                    ? '종일'
-                    : formatTime(promise.promiseStart as any)
-                  }
-                </Text>
-                <View style={[
-                  styles.modalColorBar,
-                  { backgroundColor: getScheduleColor(promise.promiseColor) },
-                ]} />
-                <View style={styles.modalItemContent}>
-                  <Text style={styles.modalItemTitle} numberOfLines={1}>
-                    {(promise as any).categoryEmoji ? `${(promise as any).categoryEmoji} ` : ''}
-                    {promise.promiseTitle}
+            {modalPromises.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="calendar-outline" size={36} color="#D1CCC5" />
+                <Text style={styles.emptyText}>이 날에는 약속이 없어요</Text>
+                <Text style={styles.emptySubText}>새로운 약속을 추가해보세요 🐾</Text>
+              </View>
+            ) : (
+              modalPromises.map((p, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setModalVisible(false);
+                    navigation.navigate('PromiseDetail', { promiseId: p.promiseId });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalItemTime}>
+                    {p.allDay ? '종일' : formatTime(p.promiseStart as any)}
                   </Text>
-                  {promise.promiseStart && !promise.allDay && (
-                    <Text style={styles.modalItemSub}>
-                      {formatTime(promise.promiseStart as any)}
-                      {promise.promiseEnd ? ` – ${formatTime(promise.promiseEnd as any)}` : ''}
+                  <View style={[styles.modalColorBar, { backgroundColor: getScheduleColor(p.promiseColor) }]} />
+                  <View style={styles.modalItemContent}>
+                    <Text style={styles.modalItemTitle} numberOfLines={1}>
+                      {(p as any).categoryEmoji ? `${(p as any).categoryEmoji} ` : ''}
+                      {p.promiseTitle}
                     </Text>
-                  )}
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textHint} />
-              </TouchableOpacity>
-            ))}
+                    {p.promiseStart && !p.allDay && (
+                      <Text style={styles.modalItemSub}>
+                        {formatTime(p.promiseStart as any)}
+                        {p.promiseEnd ? ` – ${formatTime(p.promiseEnd as any)}` : ''}
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#D1CCC5" />
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
 
-          {/* 하단 추가 버튼 */}
           <View style={styles.modalFooter}>
             <TouchableOpacity
               style={styles.modalAddButton}
               onPress={() => {
                 setModalVisible(false);
-                navigation.navigate('PromiseCreate', {
-                  date: format(modalDate, 'yyyy-MM-dd'),
-                });
+                navigation.navigate('PromiseCreate', { date: format(modalDate, 'yyyy-MM-dd') });
               }}
               activeOpacity={0.8}
             >
               <Text style={styles.modalAddText}>
-                {format(modalDate, 'M월 d일', { locale: ko })}에 추가
+                {format(modalDate, 'M월 d일', { locale: ko })}에 약속 추가
               </Text>
               <View style={styles.modalAddIcon}>
-                <Ionicons name="add" size={20} color={Colors.white} />
+                <Ionicons name="add" size={20} color="#FFF" />
               </View>
             </TouchableOpacity>
           </View>
@@ -353,124 +350,104 @@ export const PromiseCalendarScreen: React.FC<{ navigation: any }> = ({ navigatio
   );
 };
 
-// LocalDateTime type alias for clarity
-type LocalDateTime = string | Date;
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { alignItems: 'center', paddingVertical: Spacing.md },
-  titleBadge: {
-    backgroundColor: Colors.promisePrimary,
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full, ...Shadow.sm,
-  },
-  titleText: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
+  container: { flex: 1, backgroundColor: '#FDFBF7' },
+  header: { alignItems: 'center', paddingVertical: Spacing.md, marginBottom: Spacing.xs },
+  headerTitle: { fontFamily: FontFamily.diary, fontSize: 24, color: '#4A3B32' },
 
-  calendarContainer: {
-    flex: 1, marginHorizontal: Spacing.lg,
-    backgroundColor: Colors.surfaceLight,
-    borderRadius: BorderRadius.xl, padding: Spacing.md, ...Shadow.sm,
+  calendarCard: {
+    flex: 1, marginHorizontal: Spacing.lg, marginBottom: Spacing.lg,
+    backgroundColor: '#FFFDF9', borderRadius: 24,
+    padding: Spacing.lg, borderWidth: 1, borderColor: '#F0EBE1',
+    shadowColor: '#4A3B32', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
   },
   monthNav: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+    marginBottom: Spacing.md,
   },
-  navButton: { padding: Spacing.sm },
-  monthText: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  weekHeader: {
-    flexDirection: 'row', justifyContent: 'space-around',
-    paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+  navButton: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFBF0',
+    justifyContent: 'center', alignItems: 'center',
   },
-  weekDayText: {
-    width: CELL_SIZE, textAlign: 'center',
-    fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary,
-  },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingTop: Spacing.sm },
+  monthText: { fontFamily: FontFamily.diary, fontSize: 25, color: '#4A3B32' },
 
-  dayCell: {
-    width: CELL_SIZE, height: CELL_HEIGHT,
-    alignItems: 'center', marginVertical: 1,
-    paddingTop: 4,
-  },
-  todayCell:    { backgroundColor: Colors.primaryLight, borderRadius: BorderRadius.sm },
-  selectedCell: { backgroundColor: Colors.promisePrimary, borderRadius: BorderRadius.sm },
-  dayText: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.medium },
-  inactiveDayText: { color: Colors.textDisabled },
-  sundayText:      { color: Colors.calendar.sunday },
-  saturdayText:    { color: Colors.calendar.saturday },
-  todayText:       { color: Colors.primary, fontWeight: FontWeight.bold },
-  selectedDayText: { color: Colors.white, fontWeight: FontWeight.bold },
+  weekHeader:  { flexDirection: 'row', justifyContent: 'space-around', marginBottom: Spacing.xs },
+  weekDayText: { width: CELL_W, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: '#A0938A' },
 
-  // 색상 바
-  barContainer: { width: CELL_SIZE - 4, marginTop: 2, gap: 1 },
+  gridContainer: { flex: 1, justifyContent: 'space-between' },
+  weekRow: { marginBottom: 2 },
+  dateNumRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  emptyCell:  { width: CELL_W, height: 32 },
+  dateNumCell: {
+    width: CELL_W, height: 32,
+    justifyContent: 'center', alignItems: 'center', borderRadius: 12,
+  },
+  todayNumCell: { backgroundColor: '#FFFBF0' },
+
+  dayText: { fontSize: 14, color: '#4A3B32', fontWeight: '500' },
+  todayText: { color: '#FFB5B5', fontWeight: 'bold' },
+
+  barsArea: { position: 'relative', marginBottom: 2, marginTop: 1 },
   bar: {
-    width: '100%', height: 13, borderRadius: 2,
-    justifyContent: 'center', paddingHorizontal: 2, overflow: 'hidden',
+    position: 'absolute', height: BAR_H,
+    justifyContent: 'center', paddingHorizontal: 4, overflow: 'hidden',
   },
-  barText: { fontSize: 8, color: '#fff', fontWeight: '600' },
+  barText: { fontSize: 9, color: '#fff', fontWeight: '700' },
 
-  addButton: {
+  fab: {
     position: 'absolute', right: Spacing.xl, bottom: Spacing.xl,
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: Colors.promiseSecondary,
-    justifyContent: 'center', alignItems: 'center', ...Shadow.lg,
+    width: 56, height: 56, borderRadius: 28, backgroundColor: '#4FC3F7',
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#4FC3F7', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },
 
-  // 모달 오버레이
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  // 바텀시트 카드
+  // 모달
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   modalCard: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    backgroundColor: Colors.white ?? '#fff',
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
     maxHeight: '62%',
-    ...Shadow.lg,
+    shadowColor: '#4A3B32', shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08, shadowRadius: 12, elevation: 10,
   },
   modalHandle: {
-    alignSelf: 'center',
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: Colors.border,
-    marginTop: 10, marginBottom: 4,
+    alignSelf: 'center', width: 40, height: 4, borderRadius: 2,
+    backgroundColor: '#E5DED5', marginTop: 12, marginBottom: 4,
   },
   modalHeader: {
     flexDirection: 'row', alignItems: 'baseline', gap: 8,
     paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md,
   },
-  modalDay: { fontSize: 30, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  modalWeekday: { fontSize: FontSize.md, color: Colors.textSecondary },
-  modalDivider: { height: 1, backgroundColor: Colors.borderLight, marginHorizontal: Spacing.lg },
+  modalDay:     { fontFamily: FontFamily.diary, fontSize: 40, color: '#4A3B32' },
+  modalWeekday: { fontSize: 14, color: '#A0938A' },
+  modalDivider: { height: 1, backgroundColor: '#F0EBE1', marginHorizontal: Spacing.lg },
 
   modalList: { flexGrow: 0, paddingHorizontal: Spacing.lg },
-  modalItem: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: Spacing.md, gap: Spacing.sm,
-  },
-  modalItemTime: {
-    width: 44, fontSize: FontSize.sm, color: Colors.textSecondary,
-    fontWeight: FontWeight.medium, textAlign: 'right',
-  },
+  emptyState: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: 6 },
+  emptyText:  { fontSize: 14, color: '#A0938A', fontWeight: '600' },
+  emptySubText: { fontSize: 12, color: '#D1CCC5' },
+
+  modalItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.sm },
+  modalItemTime: { width: 44, fontSize: 12, color: '#A0938A', fontWeight: '600', textAlign: 'right' },
   modalColorBar: { width: 4, height: 38, borderRadius: 2 },
   modalItemContent: { flex: 1 },
-  modalItemTitle: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.medium },
-  modalItemSub: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+  modalItemTitle:   { fontFamily: FontFamily.diary, fontSize: 20, color: '#4A3B32', fontWeight: '600' },
+  modalItemSub:     { fontSize: 11, color: '#A0938A', marginTop: 2 },
 
   modalFooter: {
-    borderTopWidth: 1, borderTopColor: Colors.borderLight,
+    borderTopWidth: 1, borderTopColor: '#F0EBE1',
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
   },
   modalAddButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: '#F5F9FF',
     borderRadius: 24, paddingVertical: 10, paddingHorizontal: 16,
   },
-  modalAddText: { fontSize: FontSize.md, color: Colors.textSecondary },
+  modalAddText: { fontSize: 14, color: '#4A3B32', fontWeight: '600' },
   modalAddIcon: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: Colors.promisePrimary,
+    width: 28, height: 28, borderRadius: 14, backgroundColor: '#4FC3F7',
     justifyContent: 'center', alignItems: 'center',
   },
 });

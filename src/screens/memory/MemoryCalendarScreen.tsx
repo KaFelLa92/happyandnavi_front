@@ -8,319 +8,375 @@
  */
 
 import { API_BASE_URL } from '../../constants/config';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  Image, Dimensions,
+  View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  format, startOfMonth, endOfMonth, eachDayOfInterval,
-  getDay, addMonths, subMonths, isSameDay, isToday as dateFnsIsToday,
+  format, startOfMonth, endOfMonth, eachDayOfInterval, getDay,
+  addMonths, subMonths, isSameDay, isToday as dateFnsIsToday, isAfter, isBefore, startOfDay,
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Colors } from '@constants/colors';
-import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
+import { Spacing } from '@constants/typography';
 import { LoadingSpinner } from '@components/common';
 import { getCalendarData } from '@services/memoryService';
 import { MemoryCalendarItem } from '@types';
+import { FontFamily } from '@constants/typography';
 
 const { width } = Dimensions.get('window');
-const CELL_SIZE = (width - Spacing.lg * 2 - Spacing.xs * 6) / 7;
+const CELL_W = (width - Spacing.lg * 2 - Spacing.lg * 2 - 10) / 7;
 
 interface CalendarDay {
-  date: Date;
-  day: number;
-  isCurrentMonth: boolean;
-  memory?: MemoryCalendarItem;
+  date: Date; day: number; isCurrentMonth: boolean;
+  isFuture: boolean; memory?: MemoryCalendarItem;
 }
 
+const isVideoUrl = (url?: string): boolean => {
+  if (!url) return false;
+  return /\.(mp4|mov|m4v|avi|webm|mkv)(\?|$)/i.test(url);
+};
+
+const getImageUrl = (path?: string): string | undefined => {
+  if (!path) return undefined;
+  if (path.startsWith('http') && !path.includes('localhost')) return path;
+  const match = path.match(/(\/profile\/.*|\/memory\/.*)/);
+  if (match && match[1]) return `${API_BASE_URL}/uploads${match[1]}`;
+  return path;
+};
+
 export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate,  setCurrentDate]  = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [calendarData, setCalendarData] = useState<MemoryCalendarItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading,    setIsLoading]    = useState(true);
 
-   const getImageUrl = (path?: string) => {
-       if (!path) return undefined;
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
 
-       // 1. 구글/카카오 프사 등 정상적인 외부 인터넷 주소는 그대로 통과
-       if (path.startsWith('http') && !path.includes('localhost')) {
-         return path;
-       }
-
-       // 2. 정규식을 사용하여 진짜 경로('/profile/...' 또는 '/memory/...')만 쏙 뽑아냅니다.
-       // 앞에 http://localhost:8080/uploads/uploads/ 가 몇 개가 붙어있든 다 무시합니다!
-       const match = path.match(/(\/profile\/.*|\/memory\/.*)/);
-
-       if (match && match[1]) {
-         // 3. 현재 노트북 IP(API_BASE_URL) + /uploads + 진짜 경로 조립
-         return `${API_BASE_URL}/uploads${match[1]}`;
-       }
-
-       return path; // 매칭 안 될 경우를 대비한 안전 장치
-     };
-
-/*
-  const getImageUrl = (path?: string) => {
-      if (!path) return undefined;
-      if (path.startsWith('http') && !path.includes('localhost')) {
-        return path;
-      }
-      const cleanPath = path.replace(/http:\/\/localhost:\d+/g, '');
-      return `${API_BASE_URL}/uploads${cleanPath}`;
-    };
-*/
-
-  // ========================================
-  // 데이터 로딩 (useFocusEffect: 화면 복귀 시 자동 재로딩)
-  // ========================================
   const loadCalendarData = useCallback(async () => {
     try {
-      const year  = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1;
-      const data  = await getCalendarData(year, month);
+      const data = await getCalendarData(currentDate.getFullYear(), currentDate.getMonth() + 1);
       setCalendarData(data);
-    } catch (error) {
-      console.error('캘린더 데이터 로딩 실패:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setIsLoading(false); }
   }, [currentDate]);
 
-  useFocusEffect(
-    useCallback(() => {
-      setIsLoading(true);
-      loadCalendarData();
-    }, [loadCalendarData])
-  );
+  useFocusEffect(useCallback(() => { setIsLoading(true); loadCalendarData(); }, [loadCalendarData]));
 
-  // ========================================
-  // 월 변경
-  // ========================================
-  const handlePrevMonth = () => {
-    setCurrentDate(subMonths(currentDate, 1));
-    setSelectedDate(null);
-  };
-  const handleNextMonth = () => {
-    setCurrentDate(addMonths(currentDate, 1));
-    setSelectedDate(null);
-  };
+  // 오늘 작성된 추억이 있는가?
+  const todayMemory = useMemo(() => {
+    const todayDay = new Date().getDate();
+    const cur = currentDate;
+    const isShowingThisMonth = cur.getFullYear() === new Date().getFullYear()
+      && cur.getMonth() === new Date().getMonth();
+    if (!isShowingThisMonth) return null;
+    return calendarData.find(item => item.day === todayDay) ?? null;
+  }, [calendarData, currentDate]);
 
-  // ========================================
-  // 캘린더 데이터 생성
-  // ========================================
   const generateCalendarDays = (): CalendarDay[] => {
     const start = startOfMonth(currentDate);
-    const end   = endOfMonth(currentDate);
-    const days  = eachDayOfInterval({ start, end });
-    const startDayOfWeek = getDay(start);
+    const end = endOfMonth(currentDate);
+    const startDow = getDay(start);
 
-    const emptyDays: CalendarDay[] = Array(startDayOfWeek).fill(null).map((_, i) => ({
-      date: new Date(start.getFullYear(), start.getMonth(), -startDayOfWeek + i + 1),
-      day: -startDayOfWeek + i + 1,
-      isCurrentMonth: false,
+    const empty: CalendarDay[] = Array(startDow).fill(null).map((_, i) => ({
+      date: new Date(start.getFullYear(), start.getMonth(), -startDow + i + 1),
+      day: -startDow + i + 1, isCurrentMonth: false, isFuture: false,
     }));
 
-    const calDays: CalendarDay[] = days.map(date => {
+    const days: CalendarDay[] = eachDayOfInterval({ start, end }).map(date => {
       const day = date.getDate();
       const memory = calendarData.find(item => item.day === day);
-      return { date, day, isCurrentMonth: true, memory };
+      return {
+        date, day, isCurrentMonth: true, memory,
+        isFuture: isAfter(startOfDay(date), today),
+      };
     });
+    const combined = [...empty, ...days];
 
-    return [...emptyDays, ...calDays];
+    // 마지막 줄이 가운데 정렬되는 현상 방지! (7의 배수가 되도록 투명한 빈 칸 채우기)
+    const remainder = combined.length % 7;
+    if (remainder > 0) {
+      const fillCount = 7 - remainder;
+      for (let i = 0; i < fillCount; i++) {
+        combined.push({
+          date: new Date(end.getFullYear(), end.getMonth(), end.getDate() + i + 1),
+          day: -1, // 음수를 주어 화면에 숫자 없이 투명하게 렌더링되도록 함
+          isCurrentMonth: false,
+          isFuture: true,
+        });
+      }
+    }
+
+    return combined;
   };
 
   // ========================================
-  // 날짜 셀 클릭 처리
-  //  - 추억 있는 날: 바로 상세 이동
-  //  - 빈 날 (당일): 1번 클릭 → 선택, 2번 클릭 → 등록 이동
-  //  - 빈 날 (비당일): 선택만 (등록 불가)
+  // 날짜 클릭 — UX 분기
   // ========================================
   const handleDayPress = (item: CalendarDay) => {
     if (!item.isCurrentMonth) return;
 
+    // 1️⃣ 미래 날짜: 비활성
+    if (item.isFuture) {
+      // 살짝만 안내 (alert 까진 X)
+      return;
+    }
+
+    // 2️⃣ 추억이 있는 날: 상세로
     if (item.memory) {
       navigation.navigate('MemoryDetail', { memoryId: item.memory.memoryId });
       setSelectedDate(null);
       return;
     }
 
-    const isTodayCell = dateFnsIsToday(item.date);
-    const alreadySelected = selectedDate && isSameDay(item.date, selectedDate);
-
-    if (isTodayCell && alreadySelected) {
-      // 당일 두번 클릭 → 등록
-      navigation.navigate('MemoryCreate', { date: format(item.date, 'yyyy-MM-dd') });
-      setSelectedDate(null);
+    // 3️⃣ 오늘인데 추억 없음: 두 번 탭 → 작성
+    if (dateFnsIsToday(item.date)) {
+      const alreadySelected = selectedDate && isSameDay(item.date, selectedDate);
+      if (alreadySelected) {
+        navigation.navigate('MemoryCreate', { date: format(item.date, 'yyyy-MM-dd') });
+        setSelectedDate(null);
+      } else {
+        setSelectedDate(item.date);
+      }
       return;
     }
 
-    // 당일이든 아니든 첫 클릭은 선택
-    setSelectedDate(alreadySelected ? null : item.date);
+    // 4️⃣ 과거 + 추억 없음: 핵심 정책 안내
+    Alert.alert(
+      '추억일기 안내 🐾',
+      '추억일기는 그 날에만 작성할 수 있어요.\n오늘의 소중한 순간을 기록해보세요!',
+      [{ text: '확인' }],
+    );
   };
 
   // ========================================
-  // 셀 렌더링
+  // FAB 클릭 - 오늘 작성 안내
   // ========================================
-  const renderDayCell = (item: CalendarDay, index: number) => {
-    const { date, day, isCurrentMonth, memory } = item;
-    const todayCell  = dateFnsIsToday(date);
-    const isSelected = selectedDate && isSameDay(date, selectedDate);
-    const dow        = getDay(date);
-
-    return (
-      <TouchableOpacity
-        key={index}
-        style={[
-          styles.dayCell,
-          todayCell && styles.todayCell,
-          isSelected && !memory && styles.selectedCell,
-        ]}
-        onPress={() => handleDayPress(item)}
-        disabled={!isCurrentMonth}
-        activeOpacity={0.7}
-      >
-        {memory ? (
-                  <View style={styles.memoryCell}>
-                    <Image
-                      source={{ uri: getImageUrl(memory.thumbnailUrl) }}
-                      style={styles.thumbnail}
-                      resizeMode="cover"
-                      onLoad={() => console.log('✅ [Calendar 성공] 썸네일 로드 완료!')}
-                      onError={(e) => console.log('❌ [Calendar 에러] 썸네일 로드 실패 원인:', e.nativeEvent.error)}
-                    />
-                    {/* ... 텍스트 오버레이 생략 ... */}
-                  </View>
-                ): (
-          <Text style={[
-            styles.dayText,
-            !isCurrentMonth && styles.inactiveDayText,
-            dow === 0 && styles.sundayText,
-            dow === 6 && styles.saturdayText,
-            todayCell && styles.todayText,
-            isSelected && styles.selectedDayText,
-          ]}>
-            {day > 0 ? day : ''}
-          </Text>
-        )}
-      </TouchableOpacity>
-    );
+  const handleFabPress = () => {
+    if (todayMemory) {
+      Alert.alert(
+        '오늘의 추억 🐾',
+        '오늘 작성된 추억일기가 있어요!\n다시 보시겠어요?',
+        [
+          { text: '취소', style: 'cancel' },
+          {
+            text: '보기',
+            onPress: () => navigation.navigate('MemoryDetail', { memoryId: todayMemory.memoryId }),
+          },
+        ],
+      );
+      return;
+    }
+    navigation.navigate('MemoryCreate', { date: todayStr });
   };
 
   if (isLoading) return <LoadingSpinner fullScreen message="추억을 불러오는 중..." />;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <View style={styles.titleBadge}>
-          <Text style={styles.titleText}>추억일기</Text>
-        </View>
+        <Text style={styles.headerTitle}>추억일기</Text>
       </View>
 
-      <View style={styles.calendarContainer}>
-        {/* 월 네비게이션 */}
+      {/* 오늘 작성 안 했을 때 분기 배너 */}
+      {!todayMemory && (
+        <TouchableOpacity
+          style={styles.todayBanner}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('MemoryCreate', { date: todayStr })}
+        >
+          <View style={styles.bannerIconBg}>
+            <Ionicons name="heart" size={18} color="#FF6B6B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bannerTitle}>오늘의 추억을 아직 기록하지 않으셨어요</Text>
+            <Text style={styles.bannerSub}>지금 바로 기록해볼까요? 🐾</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#FF6B6B" />
+        </TouchableOpacity>
+      )}
+
+      {/* 캘린더 카드 — 화면 꽉 채움 */}
+      <View style={styles.calendarCard}>
         <View style={styles.monthNav}>
-          <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => { setCurrentDate(subMonths(currentDate, 1)); setSelectedDate(null); }}
+          >
+            <Ionicons name="chevron-back" size={20} color="#4A3B32" />
           </TouchableOpacity>
           <Text style={styles.monthText}>
             {format(currentDate, 'yyyy년 M월', { locale: ko })}
           </Text>
-          <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-            <Ionicons name="chevron-forward" size={24} color={Colors.textPrimary} />
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => { setCurrentDate(addMonths(currentDate, 1)); setSelectedDate(null); }}
+          >
+            <Ionicons name="chevron-forward" size={20} color="#4A3B32" />
           </TouchableOpacity>
         </View>
 
-        {/* 요일 헤더 */}
         <View style={styles.weekHeader}>
           {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-            <Text key={i} style={[
-              styles.weekDayText,
-              i === 0 && styles.sundayText,
-              i === 6 && styles.saturdayText,
-            ]}>{d}</Text>
+            <Text
+              key={i}
+              style={[
+                styles.weekDayText,
+                i === 0 && { color: '#FF6B6B' }, i === 6 && { color: '#4FC3F7' },
+              ]}
+            >{d}</Text>
           ))}
         </View>
 
-        {/* 날짜 그리드 */}
+        {/* 그리드 - flex: 1 로 남은 공간 꽉 채움 */}
         <View style={styles.calendarGrid}>
-          {generateCalendarDays().map((item, index) => renderDayCell(item, index))}
+          {generateCalendarDays().map((item, idx) => {
+            const isSelected = selectedDate && isSameDay(item.date, selectedDate);
+            const isVideo    = isVideoUrl(item.memory?.thumbnailUrl);
+            const dow = getDay(item.date);
+
+            return (
+              <TouchableOpacity
+                key={idx}
+                style={[
+                  styles.dayCell,
+                  dateFnsIsToday(item.date) && styles.todayCell,
+                  isSelected && !item.memory && styles.selectedCell,
+                ]}
+                onPress={() => handleDayPress(item)}
+                disabled={!item.isCurrentMonth || item.isFuture}
+                activeOpacity={0.7}
+              >
+                {item.memory ? (
+                  <View style={styles.memoryCell}>
+                    <Image
+                      source={{ uri: getImageUrl(item.memory.thumbnailUrl) }}
+                      style={styles.thumbnail}
+                      resizeMode="cover"
+                    />
+                    {/* 동영상이면 ▶ 오버레이 */}
+                    {isVideo && (
+                      <View style={styles.videoOverlay}>
+                        <Ionicons name="play" size={14} color="#FFF" />
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <Text style={[
+                    styles.dayText,
+                    !item.isCurrentMonth && styles.inactiveDayText,
+                    item.isFuture && styles.futureDayText,
+                    dow === 0 && !item.isFuture && { color: '#FF6B6B' },
+                    dow === 6 && !item.isFuture && { color: '#4FC3F7' },
+                    dateFnsIsToday(item.date) && styles.todayText,
+                    isSelected && styles.selectedDayText,
+                  ]}>
+                    {item.day > 0 ? item.day : ''}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
-      {/* + 버튼: 항상 오늘 날짜로 등록 */}
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => navigation.navigate('MemoryCreate', {
-          date: format(new Date(), 'yyyy-MM-dd'),
-        })}
-      >
-        <Ionicons name="add" size={28} color={Colors.textLight} />
+      {/* FAB - 오늘 작성 안내 */}
+      <TouchableOpacity style={styles.fab} onPress={handleFabPress}>
+        <Ionicons
+          name={todayMemory ? 'eye' : 'add'}
+          size={28}
+          color="#FFF"
+        />
       </TouchableOpacity>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { alignItems: 'center', paddingVertical: Spacing.md },
-  titleBadge: {
-    backgroundColor: Colors.memoryPrimary,
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full, ...Shadow.sm,
+  container: { flex: 1, backgroundColor: '#FDFBF7' },
+  header: { alignItems: 'center', paddingVertical: Spacing.md, marginBottom: Spacing.xs },
+  headerTitle: { fontFamily: FontFamily.diary, fontSize: 24, color: '#4A3B32' },
+
+  // 분기 배너
+  todayBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    marginHorizontal: Spacing.lg, marginBottom: Spacing.sm,
+    backgroundColor: '#FFF5F5',
+    borderRadius: 16, paddingHorizontal: Spacing.lg, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#FFD5D5',
   },
-  titleText: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-  calendarContainer: {
-    flex: 1, marginHorizontal: Spacing.lg,
-    backgroundColor: Colors.surfaceLight,
-    borderRadius: BorderRadius.xl, padding: Spacing.md, ...Shadow.sm,
+  bannerIconBg: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center',
+  },
+  bannerTitle: { fontSize: 13, fontWeight: '700', color: '#4A3B32' },
+  bannerSub:   { fontSize: 11, color: '#A0938A', marginTop: 2 },
+
+  // 캘린더 카드
+  calendarCard: {
+    flex: 1,
+    marginHorizontal: Spacing.lg, marginBottom: Spacing.lg,
+    backgroundColor: '#FFFDF9', borderRadius: 24,
+    padding: Spacing.lg, borderWidth: 1, borderColor: '#F0EBE1',
+    shadowColor: '#4A3B32', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
   },
   monthNav: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+    marginBottom: Spacing.md,
   },
-  navButton: { padding: Spacing.sm },
-  monthText: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  weekHeader: {
-    flexDirection: 'row', justifyContent: 'space-around',
-    paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+  navButton: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFBF0',
+    justifyContent: 'center', alignItems: 'center',
   },
+  monthText: { fontFamily: FontFamily.diary, fontSize: 18, color: '#4A3B32' },
+
+  weekHeader: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: Spacing.xs },
   weekDayText: {
-    width: CELL_SIZE, textAlign: 'center',
-    fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary,
+    width: CELL_W, textAlign: 'center',
+    fontSize: 12, fontWeight: 'bold', color: '#A0938A',
   },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingTop: Spacing.sm },
+
+  calendarGrid: {
+    flex: 1,
+    flexDirection: 'row', flexWrap: 'wrap',
+    justifyContent: 'space-around', alignContent: 'space-around',
+  },
   dayCell: {
-    width: CELL_SIZE, height: CELL_SIZE,
-    justifyContent: 'center', alignItems: 'center', marginVertical: Spacing.xxs,
+    width: CELL_W, aspectRatio: 1,
+    justifyContent: 'center', alignItems: 'center',
+    marginVertical: 2, borderRadius: 12,
   },
-  todayCell:    { backgroundColor: Colors.primaryLight, borderRadius: BorderRadius.sm },
-  selectedCell: { backgroundColor: Colors.memorySecondary, borderRadius: BorderRadius.sm },
-  dayText:          { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.medium },
-  inactiveDayText:  { color: Colors.textDisabled },
-  sundayText:       { color: Colors.calendar.sunday },
-  saturdayText:     { color: Colors.calendar.saturday },
-  todayText:        { color: Colors.primary, fontWeight: FontWeight.bold },
-  selectedDayText:  { color: Colors.white, fontWeight: FontWeight.bold },
+  todayCell:    { backgroundColor: '#FFFBF0' },
+  selectedCell: { backgroundColor: '#FFC85C' },
+
+  dayText:        { fontSize: 14, color: '#4A3B32', fontWeight: '500' },
+  inactiveDayText:{ color: '#E5DED5' },
+  futureDayText:  { color: '#E5DED5' }, // 미래는 비활성 색
+  todayText:      { color: '#FFB5B5', fontWeight: 'bold' },
+  selectedDayText:{ color: '#FFF', fontWeight: 'bold' },
+
   memoryCell: {
-    width: CELL_SIZE - 4, height: CELL_SIZE - 4,
-    borderRadius: BorderRadius.sm, overflow: 'hidden',
+    width: CELL_W - 4, height: CELL_W - 4,
+    borderRadius: 10, overflow: 'hidden',
   },
   thumbnail: { width: '100%', height: '100%' },
-  dayOverlay: {
-    position: 'absolute', bottom: 2, right: 2,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4,
+  videoOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  dayTextOnImage: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  addButton: {
+
+  fab: {
     position: 'absolute', right: Spacing.xl, bottom: Spacing.xl,
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: Colors.memorySecondary,
-    justifyContent: 'center', alignItems: 'center', ...Shadow.lg,
+    backgroundColor: '#FF6B6B',
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#FF6B6B', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },
 });
 

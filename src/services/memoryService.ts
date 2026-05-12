@@ -17,10 +17,6 @@ import {
 } from '../types';
 
 // ============================================
-// 추억일기 생성
-// ============================================
-
-// ============================================
 // FormData 헬퍼: undefined/null이 아닌 필드만 append
 // ============================================
 
@@ -29,54 +25,93 @@ const appendIfDefined = (formData: FormData, key: string, value: any) => {
   formData.append(key, String(value));
 };
 
+// ============================================
+// MIME 타입 헬퍼
+// ============================================
+/**
+ * URI에서 MIME 타입 추출
+ * @param uri    파일 URI
+ * @param kind   'image' | 'video'
+ */
+const resolveMimeType = (uri: string, kind: 'image' | 'video'): string => {
+  const ext = (uri.split('/').pop() ?? '').split('.').pop()?.toLowerCase() ?? '';
+
+  if (kind === 'video') {
+    const videoMimes: Record<string, string> = {
+      mp4: 'video/mp4',
+      mov: 'video/quicktime',
+      avi: 'video/x-msvideo',
+      webm: 'video/webm',
+      mkv: 'video/x-matroska',
+    };
+    return videoMimes[ext] ?? 'video/mp4';
+  }
+
+  const imageMimes: Record<string, string> = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+  };
+  return imageMimes[ext] ?? 'image/jpeg';
+};
+
+/**
+ * URI에서 파일명 추출 (없으면 기본값)
+ */
+const resolveFilename = (uri: string, kind: 'image' | 'video'): string => {
+  const basename = uri.split('/').pop();
+  if (basename && basename.includes('.')) return basename;
+  return kind === 'video' ? 'memory_video.mp4' : 'memory_image.jpg';
+};
+
+// ============================================
+// 추억일기 생성
+// ============================================
+
 /**
  * 추억일기 생성
- * 
- * multipart/form-data 형식으로 평면 필드로 전송합니다.
- * 
- * @param request - 추억일기 데이터
- * @param imageUri - 이미지 파일 URI
+ *
+ * multipart/form-data 평면 필드로 전송합니다.
+ * 사진 또는 동영상(최대 5초) 모두 지원합니다.
+ *
+ * @param request   추억일기 데이터
+ * @param mediaUri  사진/동영상 파일 URI
+ * @param mediaType 'image' | 'video' (기본: 'image')
  * @returns 생성된 추억일기
  */
 export const createMemory = async (
   request: CreateMemoryRequest,
-  imageUri: string
+  mediaUri: string,
+  mediaType: 'image' | 'video' = 'image',
 ): Promise<Memory> => {
   try {
-    debugLog('추억일기 생성:', request.memoryDate);
-    
+    debugLog('추억일기 생성:', request.memoryDate, mediaType);
+
     const formData = new FormData();
 
-    // 평면 form 필드로 추가 (필수)
+    // 평면 form 필드
     formData.append('memoryDate', request.memoryDate);
-
-    // 선택 필드
     appendIfDefined(formData, 'memoryComment', request.memoryComment);
     appendIfDefined(formData, 'memoryWeather', request.memoryWeather);
     appendIfDefined(formData, 'userMood', request.userMood);
     appendIfDefined(formData, 'petMood', request.petMood);
 
-    // 이미지 파일
-    const filename = imageUri.split('/').pop() || 'photo.jpg';
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1]}` : 'image/jpeg';
-    
+    // 미디어 파일 (필드명: 'image' — 백엔드 @RequestParam 이름 유지)
     formData.append('image', {
-      uri: imageUri,
-      name: filename,
-      type,
+      uri:  mediaUri,
+      name: resolveFilename(mediaUri, mediaType),
+      type: resolveMimeType(mediaUri, mediaType),
     } as any);
-    
+
     const response = await postFormData<Memory>(
       API_ENDPOINTS.MEMORY.BASE,
-      formData
+      formData,
     );
-    
+
     if (response.success && response.data) {
       debugLog('추억일기 생성 완료:', response.data.memoryId);
       return response.data;
     }
-    
+
     throw new Error(response.message || '추억일기 등록에 실패했습니다.');
   } catch (error: any) {
     debugLog('추억일기 생성 실패:', error.message);
@@ -88,24 +123,11 @@ export const createMemory = async (
 // 추억일기 조회
 // ============================================
 
-/**
- * 추억일기 상세 조회
- * 
- * @param memoryId - 추억일기 ID
- * @returns 추억일기 상세 정보
- */
 export const getMemory = async (memoryId: number): Promise<Memory> => {
   try {
     debugLog('추억일기 상세 조회:', memoryId);
-    
-    const response = await get<Memory>(
-      `${API_ENDPOINTS.MEMORY.BASE}/${memoryId}`
-    );
-    
-    if (response.success && response.data) {
-      return response.data;
-    }
-    
+    const response = await get<Memory>(`${API_ENDPOINTS.MEMORY.BASE}/${memoryId}`);
+    if (response.success && response.data) return response.data;
     throw new Error(response.message || '추억일기를 찾을 수 없습니다.');
   } catch (error: any) {
     debugLog('추억일기 상세 조회 실패:', error.message);
@@ -113,29 +135,14 @@ export const getMemory = async (memoryId: number): Promise<Memory> => {
   }
 };
 
-/**
- * 추억일기 목록 조회 (페이징)
- * 
- * @param page - 페이지 번호 (0부터 시작)
- * @param size - 페이지 크기
- * @returns 페이징된 추억일기 목록
- */
 export const getMemories = async (
   page: number = 0,
-  size: number = 20
+  size: number = 20,
 ): Promise<PageResponse<Memory>> => {
   try {
     debugLog('추억일기 목록 조회:', { page, size });
-    
-    const response = await get<PageResponse<Memory>>(
-      API_ENDPOINTS.MEMORY.BASE,
-      { page, size }
-    );
-    
-    if (response.success && response.data) {
-      return response.data;
-    }
-    
+    const response = await get<PageResponse<Memory>>(API_ENDPOINTS.MEMORY.BASE, { page, size });
+    if (response.success && response.data) return response.data;
     throw new Error(response.message || '추억일기 목록을 가져올 수 없습니다.');
   } catch (error: any) {
     debugLog('추억일기 목록 조회 실패:', error.message);
@@ -143,32 +150,16 @@ export const getMemories = async (
   }
 };
 
-/**
- * 월별 캘린더 데이터 조회
- * 
- * 캘린더 UI에 표시할 썸네일 데이터를 반환합니다.
- * 
- * @param year - 연도
- * @param month - 월 (1~12)
- * @returns 캘린더 아이템 목록
- */
 export const getCalendarData = async (
   year: number,
-  month: number
+  month: number,
 ): Promise<MemoryCalendarItem[]> => {
   try {
     debugLog('추억일기 캘린더 조회:', { year, month });
-    
     const response = await get<MemoryCalendarItem[]>(
-      API_ENDPOINTS.MEMORY.CALENDAR,
-      { year, month }
+      API_ENDPOINTS.MEMORY.CALENDAR, { year, month },
     );
-    
-    if (response.success && response.data) {
-      return response.data;
-    }
-    
-    // 데이터가 없는 경우 빈 배열 반환
+    if (response.success && response.data) return response.data;
     return [];
   } catch (error: any) {
     debugLog('추억일기 캘린더 조회 실패:', error.message);
@@ -176,24 +167,11 @@ export const getCalendarData = async (
   }
 };
 
-/**
- * 연도별 추억일기 조회
- * 
- * @param year - 연도
- * @returns 해당 연도의 추억일기 목록
- */
 export const getMemoriesByYear = async (year: number): Promise<Memory[]> => {
   try {
     debugLog('연도별 추억일기 조회:', year);
-    
-    const response = await get<Memory[]>(
-      `${API_ENDPOINTS.MEMORY.YEAR}/${year}`
-    );
-    
-    if (response.success && response.data) {
-      return response.data;
-    }
-    
+    const response = await get<Memory[]>(`${API_ENDPOINTS.MEMORY.YEAR}/${year}`);
+    if (response.success && response.data) return response.data;
     return [];
   } catch (error: any) {
     debugLog('연도별 추억일기 조회 실패:', error.message);
@@ -201,25 +179,11 @@ export const getMemoriesByYear = async (year: number): Promise<Memory[]> => {
   }
 };
 
-/**
- * 추억일기 검색
- * 
- * @param keyword - 검색 키워드
- * @returns 검색 결과 목록
- */
 export const searchMemories = async (keyword: string): Promise<Memory[]> => {
   try {
     debugLog('추억일기 검색:', keyword);
-    
-    const response = await get<Memory[]>(
-      API_ENDPOINTS.MEMORY.SEARCH,
-      { keyword }
-    );
-    
-    if (response.success && response.data) {
-      return response.data;
-    }
-    
+    const response = await get<Memory[]>(API_ENDPOINTS.MEMORY.SEARCH, { keyword });
+    if (response.success && response.data) return response.data;
     return [];
   } catch (error: any) {
     debugLog('추억일기 검색 실패:', error.message);
@@ -233,51 +197,34 @@ export const searchMemories = async (keyword: string): Promise<Memory[]> => {
 
 /**
  * 추억일기 수정
- * 평면 form 필드로 전송. 이미지는 선택.
- * 
- * @param memoryId - 추억일기 ID
- * @param request - 수정할 데이터
- * @param imageUri - 새 이미지 URI (선택)
- * @returns 수정된 추억일기
+ *
+ * 260508: mediaType 파라미터 추가 (동영상 수정 미지원 — 정책상 미디어 변경 불가)
+ * ⚠️ 수정 시 미디어 파일 변경은 정책상 불가 (코멘트/날씨/기분만 수정)
  */
 export const updateMemory = async (
   memoryId: number,
   request: UpdateMemoryRequest,
-  imageUri?: string
 ): Promise<Memory> => {
   try {
     debugLog('추억일기 수정:', memoryId);
-    
-    const formData = new FormData();
 
-    appendIfDefined(formData, 'memoryDate', request.memoryDate);
+    const formData = new FormData();
+    appendIfDefined(formData, 'memoryDate',    request.memoryDate);
     appendIfDefined(formData, 'memoryComment', request.memoryComment);
     appendIfDefined(formData, 'memoryWeather', request.memoryWeather);
-    appendIfDefined(formData, 'userMood', request.userMood);
-    appendIfDefined(formData, 'petMood', request.petMood);
+    appendIfDefined(formData, 'userMood',      request.userMood);
+    appendIfDefined(formData, 'petMood',       request.petMood);
 
-    if (imageUri) {
-      const filename = imageUri.split('/').pop() || 'photo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1]}` : 'image/jpeg';
-      
-      formData.append('image', {
-        uri: imageUri,
-        name: filename,
-        type,
-      } as any);
-    }
-    
     const response = await putFormData<Memory>(
       `${API_ENDPOINTS.MEMORY.BASE}/${memoryId}`,
-      formData
+      formData,
     );
-    
+
     if (response.success && response.data) {
       debugLog('추억일기 수정 완료');
       return response.data;
     }
-    
+
     throw new Error(response.message || '추억일기 수정에 실패했습니다.');
   } catch (error: any) {
     debugLog('추억일기 수정 실패:', error.message);
@@ -289,24 +236,11 @@ export const updateMemory = async (
 // 추억일기 삭제
 // ============================================
 
-/**
- * 추억일기 삭제
- * 
- * @param memoryId - 추억일기 ID
- */
 export const deleteMemory = async (memoryId: number): Promise<void> => {
   try {
     debugLog('추억일기 삭제:', memoryId);
-    
-    const response = await del<void>(
-      `${API_ENDPOINTS.MEMORY.BASE}/${memoryId}`
-    );
-    
-    if (response.success) {
-      debugLog('추억일기 삭제 완료');
-      return;
-    }
-    
+    const response = await del<void>(`${API_ENDPOINTS.MEMORY.BASE}/${memoryId}`);
+    if (response.success) { debugLog('추억일기 삭제 완료'); return; }
     throw new Error(response.message || '추억일기 삭제에 실패했습니다.');
   } catch (error: any) {
     debugLog('추억일기 삭제 실패:', error.message);

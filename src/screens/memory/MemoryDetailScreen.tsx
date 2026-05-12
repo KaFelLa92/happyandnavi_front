@@ -19,6 +19,7 @@
  import { LoadingSpinner } from '@components/common';
  import { getMemory, deleteMemory } from '@services/memoryService';
  import { Memory } from '@types';
+ import { FontFamily } from '@constants/typography';
 
  // ============================================
  // 코드표 (MemoryCreateScreen 과 동일)
@@ -93,7 +94,7 @@
            try {
              setIsDeleting(true);
              await deleteMemory(memoryId);
-             navigation.goBack();
+             navigation.navigate('MemoryCalendar');
            } catch (e: any) {
              Alert.alert('오류', e.message || '삭제 실패');
              setIsDeleting(false);
@@ -111,107 +112,78 @@
    const hasMeta  = weather || userMood || petMood;
 
    return (
-     <SafeAreaView style={styles.container}>
-       {/* 헤더 */}
-       <View style={styles.header}>
-         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-         </TouchableOpacity>
-         <Text style={styles.headerTitle}>추억일기</Text>
-         <View style={styles.headerRight}>
-           <TouchableOpacity
-             onPress={() => navigation.navigate('MemoryEdit', { memory })}
-             style={styles.headerBtn}
-           >
-             <Ionicons name="pencil-outline" size={22} color={Colors.primary} />
+       <SafeAreaView style={styles.container}>
+         <View style={styles.header}>
+           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
+             <Ionicons name="arrow-back" size={24} color="#4A3B32" />
            </TouchableOpacity>
-           <TouchableOpacity onPress={handleDelete} style={styles.headerBtn} disabled={isDeleting}>
-             {isDeleting
-               ? <ActivityIndicator size="small" color={Colors.error} />
-               : <Ionicons name="trash-outline" size={22} color={Colors.error} />
-             }
-           </TouchableOpacity>
+           <Text style={styles.headerTitle}>{memory?.memoryDate}</Text>
+           <View style={styles.headerRight}>
+             <TouchableOpacity onPress={() => navigation.navigate('MemoryEdit', { memory })} style={styles.iconBtn}>
+               <Ionicons name="pencil" size={20} color="#A0938A" />
+             </TouchableOpacity>
+             <TouchableOpacity onPress={handleDelete} style={styles.iconBtn}>
+               <Ionicons name="trash" size={20} color="#FF6B6B" />
+             </TouchableOpacity>
+           </View>
          </View>
-       </View>
 
-       <ScrollView showsVerticalScrollIndicator={false}>
-         {/* 사진 */}
-         {memory?.memoryUrl && (
-                    <Image
-                      source={{ uri: getImageUrl(memory.memoryUrl) }}
-                      style={styles.image}
-                      resizeMode="cover"
-                      onLoad={() => console.log('✅ [Detail 성공] 이미지 로드 완료!')}
-                      onError={(e) => console.log('❌ [Detail 에러] 이미지 로드 실패 원인:', e.nativeEvent.error)}
-                    />
-                  )}
-
-         <View style={styles.content}>
-           {/* 날짜 */}
-           <Text style={styles.date}>{memory?.memoryDate}</Text>
-
-           {/* 날씨 / 기분 칩 */}
-           {hasMeta && (
-             <View style={styles.metaRow}>
-               {weather && (
-                 <View style={styles.metaChip}>
-                   <Text style={styles.metaEmoji}>{weather.emoji}</Text>
-                   <Text style={styles.metaLabel}>{weather.label}</Text>
-                 </View>
-               )}
-               {userMood && (
-                 <View style={styles.metaChip}>
-                   <Text style={styles.metaEmoji}>{userMood.emoji}</Text>
-                   <Text style={styles.metaLabel}>내 기분</Text>
-                 </View>
-               )}
-               {petMood && (
-                 <View style={styles.metaChip}>
-                   <Text style={styles.metaEmoji}>{petMood.emoji}</Text>
-                   <Text style={styles.metaLabel}>반려동물 기분</Text>
-                 </View>
-               )}
+         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+           {/* 폴라로이드 감성의 사진 카드 */}
+           {memory?.memoryUrl && (
+             <View style={styles.polaroidCard}>
+               <Image source={{ uri: getImageUrl(memory.memoryUrl) }} style={styles.image} resizeMode="cover" />
              </View>
            )}
 
-           {/* 본문 */}
-           {memory?.memoryComment ? (
-             <Text style={styles.body}>{memory.memoryComment}</Text>
-           ) : (
-             <Text style={styles.emptyBody}>코멘트가 없어요 🐾</Text>
+           {/* 칩스 */}
+           {hasMeta && (
+             <View style={styles.metaRow}>
+               {weather && <View style={styles.chip}><Text style={styles.chipEmoji}>{weather.emoji}</Text><Text style={styles.chipText}>{weather.label}</Text></View>}
+               {userMood && <View style={styles.chip}><Text style={styles.chipEmoji}>{userMood.emoji}</Text><Text style={styles.chipText}>내 기분</Text></View>}
+               {petMood && <View style={styles.chip}><Text style={styles.chipEmoji}>{petMood.emoji}</Text><Text style={styles.chipText}>반려동물</Text></View>}
+             </View>
            )}
-         </View>
-       </ScrollView>
-     </SafeAreaView>
-   );
- };
 
- const styles = StyleSheet.create({
-   container: { flex: 1, backgroundColor: Colors.background },
-   header: {
-     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-     paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
-   },
-   headerBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-   headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-   headerRight: { flexDirection: 'row' },
-   image: { width: '100%', height: 280 },
-   content: { padding: Spacing.xl },
-   date: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
-   metaRow: {
-     flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm,
-     marginBottom: Spacing.lg,
-   },
-   metaChip: {
-     flexDirection: 'row', alignItems: 'center', gap: 4,
-     backgroundColor: Colors.surfaceLight,
-     paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
-     borderRadius: BorderRadius.full, ...Shadow.xs,
-   },
-   metaEmoji: { fontSize: 16 },
-   metaLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
-   body: { fontSize: FontSize.md, color: Colors.textPrimary, lineHeight: 24 },
-   emptyBody: { fontSize: FontSize.md, color: Colors.textHint, fontStyle: 'italic' },
- });
+           {/* 텍스트 본문 카드 */}
+           <View style={styles.textCard}>
+             {memory?.memoryComment ? (
+               <Text style={styles.bodyText}>{memory.memoryComment}</Text>
+             ) : (
+               <Text style={styles.emptyText}>남겨진 코멘트가 없어요 🐾</Text>
+             )}
+           </View>
+         </ScrollView>
+       </SafeAreaView>
+     );
+   };
 
- export default MemoryDetailScreen;
+   const styles = StyleSheet.create({
+     container: { flex: 1, backgroundColor: '#FDFBF7' },
+     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
+     iconBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+     headerTitle: { fontFamily: FontFamily.diary, fontSize: 22, color: '#4A3B32' },
+     headerRight: { flexDirection: 'row' },
+     scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
+
+     polaroidCard: {
+       backgroundColor: '#FFFFFF', padding: 12, borderRadius: 16, marginBottom: Spacing.xl,
+       borderWidth: 1, borderColor: '#F0EBE1', shadowColor: '#4A3B32', shadowOffset: { width: 0, height: 4 },
+       shadowOpacity: 0.08, shadowRadius: 10, elevation: 4,
+     },
+     image: { width: '100%', height: 300, borderRadius: 12 },
+
+     metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: Spacing.lg },
+     chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFDF9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#F0EBE1', ...Shadow.xs },
+     chipEmoji: { fontSize: 14, marginRight: 4 },
+     chipText: { fontSize: 12, color: '#A0938A', fontWeight: 'bold' },
+
+     textCard: {
+       backgroundColor: '#FFFDF9', padding: Spacing.xl, borderRadius: 20,
+       borderWidth: 1, borderColor: '#F0EBE1', minHeight: 120,
+     },
+     bodyText: { fontFamily: FontFamily.diary, fontSize: 20, color: '#4A3B32', lineHeight: 24 },
+     emptyText: { fontFamily: FontFamily.diary, fontSize: 20, color: '#D1CCC5', fontStyle: 'italic', textAlign: 'center', marginTop: Spacing.lg },
+   });
+
+   export default MemoryDetailScreen;

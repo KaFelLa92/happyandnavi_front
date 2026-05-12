@@ -6,141 +6,189 @@
  * 약속일기(일정)의 상세 화면입니다.
  */
 
- import React, { useState, useEffect } from 'react';
- import {
-   View, Text, StyleSheet, TouchableOpacity,
-   ScrollView, Alert, ActivityIndicator,
- } from 'react-native';
- import { SafeAreaView } from 'react-native-safe-area-context';
- import { Ionicons } from '@expo/vector-icons';
- import { format, parseISO } from 'date-fns';
- import { Colors } from '@constants/colors';
- import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
- import { LoadingSpinner } from '@components/common';
- import { getPromise, deletePromise } from '@services/promiseService';
- import { Promise as PromiseType } from '@types';
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+  ScrollView, Alert, ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { format, parseISO } from 'date-fns';
+import { FontFamily, Spacing } from '@constants/typography';
+import { LoadingSpinner } from '@components/common';
+import { getPromise, deletePromise } from '@services/promiseService';
+import { Promise as PromiseType } from '@types';
 
- export const PromiseDetailScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
-   const { promiseId } = route.params;
-   const [promise, setPromise] = useState<PromiseType | null>(null);
-   const [isLoading, setIsLoading] = useState(true);
-   const [isDeleting, setIsDeleting] = useState(false);
+const SCHEDULE_COLORS: Record<string, string> = {
+  blue:   '#4FC3F7',
+  green:  '#81C784',
+  orange: '#FFB74D',
+  pink:   '#F48FB1',
+  purple: '#CE93D8',
+};
+const getScheduleColor = (key?: string | null): string =>
+  SCHEDULE_COLORS[key ?? ''] ?? '#4FC3F7';
 
-   useEffect(() => { loadPromise(); }, [promiseId]);
+const CATEGORY_MAP: Record<string, string> = {
+  VACCINATION: '💉 예방접종',
+  CHECKUP:     '🏥 정기검진',
+  GROOMING:    '✂️ 미용',
+  WALK:        '🐾 산책',
+  FOOD:        '🍚 사료 구매',
+  SNACK:       '🦴 간식',
+  NAIL:        '✨ 발톱 관리',
+  SURGERY:     '🔬 수술',
+  OTHER:       '📌 기타',
+};
 
-   const loadPromise = async () => {
-     try {
-       const data = await getPromise(promiseId);
-       setPromise(data);
-     } catch (e: any) {
-       Alert.alert('오류', e.message || '불러오기 실패');
-       navigation.goBack();
-     } finally {
-       setIsLoading(false);
-     }
-   };
+export const PromiseDetailScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
+  const { promiseId } = route.params;
+  const [promise,    setPromise]    = useState<PromiseType | null>(null);
+  const [isLoading,  setIsLoading]  = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-   const handleDelete = () => {
-     Alert.alert('삭제', '이 약속일기를 삭제하시겠습니까?', [
-       { text: '취소', style: 'cancel' },
-       {
-         text: '삭제', style: 'destructive', onPress: async () => {
-           try {
-             setIsDeleting(true);
-             await deletePromise(promiseId);
-             navigation.goBack();
-           } catch (e: any) {
-             Alert.alert('오류', e.message || '삭제 실패');
-             setIsDeleting(false);
-           }
-         },
-       },
-     ]);
-   };
+  useEffect(() => { loadPromise(); }, [promiseId]);
 
-   if (isLoading) return <LoadingSpinner fullScreen message="불러오는 중..." />;
+  const loadPromise = async () => {
+    try {
+      const data = await getPromise(promiseId);
+      setPromise(data);
+    } catch (e: any) {
+      Alert.alert('오류', e.message || '불러오기 실패');
+      navigation.goBack();
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-   const colorKey = promise?.promiseColor as keyof typeof Colors.schedule;
-   const dotColor = Colors.schedule[colorKey] || Colors.primary;
+  const handleDelete = () => {
+    Alert.alert('삭제', '이 약속일기를 삭제하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제', style: 'destructive', onPress: async () => {
+          try {
+            setIsDeleting(true);
+            await deletePromise(promiseId);
+            navigation.goBack();
+          } catch (e: any) {
+            Alert.alert('오류', e.message || '삭제 실패');
+            setIsDeleting(false);
+          }
+        },
+      },
+    ]);
+  };
 
-   return (
-     <SafeAreaView style={styles.container}>
-       <View style={styles.header}>
-         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-         </TouchableOpacity>
-         <Text style={styles.headerTitle}>약속일기</Text>
-         <View style={styles.headerRight}>
-           <TouchableOpacity
-             onPress={() => navigation.navigate('PromiseEdit', { promise })}
-             style={styles.headerBtn}
-           >
-             <Ionicons name="pencil-outline" size={22} color={Colors.primary} />
-           </TouchableOpacity>
-           <TouchableOpacity onPress={handleDelete} style={styles.headerBtn} disabled={isDeleting}>
-             {isDeleting
-               ? <ActivityIndicator size="small" color={Colors.error} />
-               : <Ionicons name="trash-outline" size={22} color={Colors.error} />
-             }
-           </TouchableOpacity>
-         </View>
-       </View>
+  if (isLoading) return <LoadingSpinner fullScreen message="불러오는 중..." />;
 
-       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-         <View style={[styles.titleBar, { borderLeftColor: dotColor }]}>
-           <Text style={styles.title}>{promise?.promiseTitle}</Text>
-         </View>
+  const dotColor   = getScheduleColor(promise?.promiseColor);
+  const catLabel   = CATEGORY_MAP[(promise as any)?.promiseCategory ?? ''];
 
-         <View style={styles.infoRow}>
-           <Ionicons name="calendar-outline" size={20} color={Colors.primary} style={styles.infoIcon} />
-           <View>
-             <Text style={styles.infoLabel}>{promise?.allDay ? '종일' : '시간'}</Text>
-             <Text style={styles.infoValue}>
-               {promise?.promiseStart
-                 ? format(parseISO(promise.promiseStart), promise.allDay ? 'yyyy.MM.dd' : 'yyyy.MM.dd HH:mm')
-                 : ''}
-               {promise?.promiseEnd && !promise.allDay
-                 ? ` ~ ${format(parseISO(promise.promiseEnd), 'HH:mm')}`
-                 : ''}
-             </Text>
-           </View>
-         </View>
+  const startFormatted = promise?.promiseStart
+    ? format(parseISO(promise.promiseStart as string), promise.allDay ? 'yyyy.MM.dd' : 'yyyy.MM.dd HH:mm')
+    : '';
+  const endFormatted = promise?.promiseEnd && !promise.allDay
+    ? ` ~ ${format(parseISO(promise.promiseEnd as string), 'yyyy.MM.dd HH:mm')}`
+    : '';
 
-         {!!promise?.promiseComment && (
-           <View style={styles.memoBox}>
-             <Text style={styles.infoLabel}>메모</Text>
-             <Text style={styles.memoText}>{promise.promiseComment}</Text>
-           </View>
-         )}
-       </ScrollView>
-     </SafeAreaView>
-   );
- };
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
+          <Ionicons name="arrow-back" size={24} color="#4A3B32" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>약속일기</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('PromiseEdit', { promise })}
+            style={styles.iconBtn}
+          >
+            <Ionicons name="pencil" size={20} color="#A0938A" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleDelete} style={styles.iconBtn} disabled={isDeleting}>
+            {isDeleting
+              ? <ActivityIndicator size="small" color="#FF6B6B" />
+              : <Ionicons name="trash" size={20} color="#FF6B6B" />
+            }
+          </TouchableOpacity>
+        </View>
+      </View>
 
- const styles = StyleSheet.create({
-   container: { flex: 1, backgroundColor: Colors.background },
-   header: {
-     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-     paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
-   },
-   headerBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-   headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-   headerRight: { flexDirection: 'row' },
-   scrollContent: { padding: Spacing.xl },
-   titleBar: { borderLeftWidth: 4, paddingLeft: Spacing.md, marginBottom: Spacing.xl },
-   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-   infoRow: {
-     flexDirection: 'row', alignItems: 'flex-start', backgroundColor: Colors.surfaceLight,
-     borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.md, ...Shadow.sm,
-   },
-   infoIcon: { marginRight: Spacing.md, marginTop: 2 },
-   infoLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: 2 },
-   infoValue: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.medium },
-   memoBox: {
-     backgroundColor: Colors.surfaceLight, borderRadius: BorderRadius.md,
-     padding: Spacing.md, ...Shadow.sm,
-   },
-   memoText: { fontSize: FontSize.md, color: Colors.textPrimary, lineHeight: 22, marginTop: Spacing.xs },
- });
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
- export default PromiseDetailScreen;
+        {/* 제목 카드 */}
+        <View style={[styles.titleCard, { borderLeftColor: dotColor }]}>
+          {catLabel && <Text style={styles.catBadge}>{catLabel}</Text>}
+          <Text style={styles.titleText}>{promise?.promiseTitle}</Text>
+        </View>
+
+        {/* 날짜/시간 카드 */}
+        <View style={styles.infoCard}>
+          <View style={[styles.infoIconBg, { backgroundColor: '#EFF9FF' }]}>
+            <Ionicons name="calendar-outline" size={20} color="#4FC3F7" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.infoSubLabel}>{promise?.allDay ? '종일' : '일시'}</Text>
+            <Text style={styles.infoValue}>{startFormatted}{endFormatted}</Text>
+          </View>
+        </View>
+
+        {/* 메모 카드 */}
+        {!!promise?.promiseComment && (
+          <View style={styles.memoCard}>
+            <View style={styles.memoHeader}>
+              <Ionicons name="document-text-outline" size={16} color="#A0938A" />
+              <Text style={styles.memoLabel}>메모</Text>
+            </View>
+            <Text style={styles.memoText}>{promise.promiseComment}</Text>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container:   { flex: 1, backgroundColor: '#FDFBF7' },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
+  },
+  iconBtn:     { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontFamily: FontFamily.diary, fontSize: 22, color: '#4A3B32' },
+  headerRight: { flexDirection: 'row' },
+  scrollContent:{ padding: Spacing.lg, paddingBottom: 50 },
+
+  titleCard: {
+    backgroundColor: '#FFFDF9', borderRadius: 20, padding: Spacing.xl,
+    borderLeftWidth: 5, borderWidth: 1, borderColor: '#F0EBE1',
+    marginBottom: Spacing.xl,
+    shadowColor: '#4A3B32', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
+  },
+  catBadge: { fontSize: 12, color: '#A0938A', marginBottom: 6, fontWeight: '600' },
+  titleText: { fontFamily: FontFamily.diary, fontSize: 28, color: '#4A3B32' },
+
+  infoCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#FFFFFF', borderRadius: 16, padding: Spacing.lg,
+    borderWidth: 1, borderColor: '#F0EBE1', marginBottom: Spacing.md,
+    shadowColor: '#4A3B32', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03, shadowRadius: 6, elevation: 2,
+  },
+  infoIconBg:   { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  infoSubLabel: { fontSize: 11, color: '#A0938A', marginBottom: 3 },
+  infoValue:    { fontSize: 15, fontWeight: '600', color: '#4A3B32' },
+
+  memoCard: {
+    backgroundColor: '#FFFDF9', borderRadius: 16, padding: Spacing.lg,
+    borderWidth: 1, borderColor: '#F0EBE1', minHeight: 100,
+    shadowColor: '#4A3B32', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03, shadowRadius: 6, elevation: 2,
+  },
+  memoHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.sm },
+  memoLabel:  { fontSize: 12, color: '#A0938A', fontWeight: '600' },
+  memoText:   { fontFamily: FontFamily.diary, fontSize: 20, color: '#4A3B32', lineHeight: 24 },
+});
+
+export default PromiseDetailScreen;

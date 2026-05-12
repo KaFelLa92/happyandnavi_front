@@ -9,254 +9,351 @@
  * 260502 변경: 날씨, 사용자기분, 반려동물기분 입력 UI 추가
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react'; // 🚨 useRef 추가
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Image, Alert, ActivityIndicator,
+  View, Text, StyleSheet, TouchableOpacity,ScrollView, Image, Alert,
+  ActivityIndicator, Modal, Pressable, Platform, KeyboardAvoidingView
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'; // 🚨 useSafeAreaInsets 추가
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { Video, ResizeMode } from 'expo-av';
 import { Colors } from '@constants/colors';
-import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
+import { FontFamily, FontSize, FontWeight, Spacing, Shadow } from '@constants/typography';
 import { Input } from '@components/common';
 import { createMemory } from '@services/memoryService';
 
-// ============================================
-// 코드표 (PROJECT_BLUEPRINT.md 와 일치)
-// ============================================
+const MAX_VIDEO_SECONDS = 30;
+const MAX_FILE_BYTES    = 50 * 1024 * 1024; // 50 MB
 
-const WEATHER_OPTIONS: { code: number; label: string; emoji: string }[] = [
-  { code: 1, label: '맑음', emoji: '☀️' },
-  { code: 2, label: '흐림', emoji: '☁️' },
-  { code: 3, label: '비',   emoji: '🌧️' },
-  { code: 4, label: '눈',   emoji: '❄️' },
-  { code: 5, label: '바람', emoji: '💨' },
+const WEATHER_OPTIONS = [
+  { code: 1, label: '맑음', emoji: '☀️' }, { code: 2, label: '흐림', emoji: '☁️' },
+  { code: 3, label: '비',   emoji: '🌧️' }, { code: 4, label: '눈',   emoji: '❄️' }, { code: 5, label: '바람', emoji: '💨' },
+];
+const MOOD_OPTIONS = [
+  { code: 1, label: '매우 좋음', emoji: '😄' }, { code: 2, label: '좋음', emoji: '🙂' },
+  { code: 3, label: '보통',     emoji: '😐' }, { code: 4, label: '나쁨', emoji: '😟' }, { code: 5, label: '매우 나쁨', emoji: '😢' },
 ];
 
-const MOOD_OPTIONS: { code: number; label: string; emoji: string }[] = [
-  { code: 1, label: '매우 좋음', emoji: '😄' },
-  { code: 2, label: '좋음',     emoji: '🙂' },
-  { code: 3, label: '보통',     emoji: '😐' },
-  { code: 4, label: '나쁨',     emoji: '😟' },
-  { code: 5, label: '매우 나쁨', emoji: '😢' },
-];
+// 동영상 길이 제한 검증 - duration 은 ms 단위
+const validateVideoDuration = (durationMs?: number): { ok: boolean; reason?: string } => {
+  if (!durationMs) return { ok: true }; // 알 수 없으면 통과 (백엔드에서 추가 검증 가능)
+  if (durationMs > MAX_VIDEO_SECONDS * 1000) {
+    return { ok: false, reason: `동영상은 최대 ${MAX_VIDEO_SECONDS}초까지 가능해요.` };
+  }
+  return { ok: true };
+};
+
+// 파일 크기 검증
+const validateFileSize = async (uri: string): Promise<{ ok: boolean; reason?: string }> => {
+  try {
+    const info = await FileSystem.getInfoAsync(uri, { size: true });
+    if ((info as any).size && (info as any).size > MAX_FILE_BYTES) {
+      const mb = Math.round((info as any).size / 1024 / 1024);
+      return { ok: false, reason: `파일이 너무 커요 (${mb}MB).\n50MB 이하 파일을 사용해주세요.` };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: true };
+  }
+};
 
 export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
-  const initialDate = route.params?.date || new Date().toISOString().split('T')[0];
+  const insets = useSafeAreaInsets();
+  const { date } = route.params;
 
-  const [content, setContent] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [weather, setWeather] = useState<number | undefined>(undefined);
-  const [userMood, setUserMood] = useState<number | undefined>(undefined);
-  const [petMood, setPetMood] = useState<number | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
-      return;
-    }
-    // expo-image-picker 신버전 호환: MediaType이 있으면 그것을, 아니면 MediaTypeOptions 사용
-    const mediaTypes: any =
-      (ImagePicker as any).MediaType?.Images ?? ImagePicker.MediaTypeOptions.Images;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) setImageUri(result.assets[0].uri);
-  };
+  const [comment,     setComment]   = useState('');
+  const [weather,     setWeather]   = useState<number | null>(null);
+  const [userMood,    setUserMood]  = useState<number | null>(null);
+  const [petMood,     setPetMood]   = useState<number | null>(null);
+  const [media,       setMedia]     = useState<{ uri: string; type: 'image' | 'video' } | null>(null);
+  const [isLoading,   setIsLoading] = useState(false);
+  const [isSheetVisible, setIsSheetVisible] = useState(false);
+  const [isCameraSubSheetVisible, setIsCameraSubSheetVisible] = useState(false);
 
   const handleSave = async () => {
-    if (!imageUri) { Alert.alert('알림', '사진을 선택해주세요.'); return; }
-    if (!content.trim()) { Alert.alert('알림', '내용을 입력해주세요.'); return; }
+    if (!media) { Alert.alert('알림', '사진 또는 영상을 선택해주세요.'); return; }
     try {
       setIsLoading(true);
-      await createMemory({
-        memoryDate: initialDate,
-        memoryComment: content,
-        memoryWeather: weather,
-        userMood,
-        petMood,
-      }, imageUri);
-      Alert.alert('완료', '추억일기가 저장되었습니다.', [
+      await createMemory(
+        {
+          memoryDate: date,
+          memoryComment: comment,
+          memoryWeather: weather ?? undefined,
+          userMood: userMood ?? undefined,
+          petMood: petMood ?? undefined,
+        },
+        media.uri,
+      );
+      Alert.alert('완료', '추억이 기록되었습니다. 🐾', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);
     } catch (e: any) {
-      Alert.alert('오류', e.message || '저장에 실패했습니다.');
+      Alert.alert('오류', e.message || '저장 실패');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 칩 셀렉터 (날씨/기분 공용)
-  const ChipGroup: React.FC<{
-    label: string;
-    options: { code: number; label: string; emoji: string }[];
-    value: number | undefined;
-    onChange: (v: number | undefined) => void;
-  }> = ({ label, options, value, onChange }) => (
-    <View style={styles.chipGroupWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={styles.chipRow}>
-        {options.map(opt => {
-          const selected = value === opt.code;
-          return (
-            <TouchableOpacity
-              key={opt.code}
-              style={[styles.chip, selected && styles.chipSelected]}
-              onPress={() => onChange(selected ? undefined : opt.code)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.chipEmoji}>{opt.emoji}</Text>
-              <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
+ const pickMedia = async (source: 'camera' | 'gallery', mediaType: 'image' | 'video' | 'all') => {
+     console.log(`\n📸 [MediaPicker] 시작 - source: ${source}, type: ${mediaType}`);
+
+     // 서브 모달 닫기
+     setIsCameraSubSheetVisible(false);
+     setIsSheetVisible(false);
+
+     // 1. 권한 확인
+     const { status } = source === 'camera'
+       ? await ImagePicker.requestCameraPermissionsAsync()
+       : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+     if (status !== 'granted') {
+       Alert.alert('권한 필요', '접근 권한이 필요합니다.');
+       return;
+     }
+
+     try {
+       // 2. 미디어 타입 분기 처리 (안드로이드 호환성 핵심!)
+       let mediaTypesOption: any;
+       if (mediaType === 'image') mediaTypesOption = ['images'];
+       else if (mediaType === 'video') mediaTypesOption = ['videos'];
+       else mediaTypesOption = ['images', 'videos']; // 갤러리는 둘 다 허용
+
+       const launchOpts: ImagePicker.ImagePickerOptions = {
+         mediaTypes: mediaTypesOption,
+         allowsEditing: Platform.OS === 'ios',
+         quality: 0.8,
+         videoMaxDuration: MAX_VIDEO_SECONDS,
+         videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+       };
+
+       console.log(`📸 [MediaPicker] 실행 옵션:`, JSON.stringify(launchOpts, null, 2));
+
+       // 3. 실행
+       const result = await (source === 'camera'
+         ? ImagePicker.launchCameraAsync(launchOpts)
+         : ImagePicker.launchImageLibraryAsync(launchOpts));
+
+       if (result.canceled || !result.assets?.[0]) return;
+
+       const asset = result.assets[0];
+       const isVideo = asset.type === 'video';
+
+       // 4. 검증 (기존 로직 유지)
+       if (isVideo) {
+         const v = validateVideoDuration((asset as any).duration);
+         if (!v.ok) { Alert.alert('영상 길이 초과', v.reason!); return; }
+       }
+
+       const f = await validateFileSize(asset.uri);
+       if (!f.ok) { Alert.alert('파일 용량 초과', f.reason!); return; }
+
+       // 5. 완료
+       setMedia({ uri: asset.uri, type: isVideo ? 'video' : 'image' });
+
+     } catch (e: any) {
+       console.log(`❌ [MediaPicker] 에러 발생:`, e);
+       Alert.alert('오류', e.message || '미디어 선택 실패');
+     }
+   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>추억일기 작성</Text>
-        <TouchableOpacity onPress={handleSave} style={styles.headerBtn} disabled={isLoading}>
-          {isLoading
-            ? <ActivityIndicator size="small" color={Colors.primary} />
-            : <Text style={styles.saveText}>저장</Text>
-          }
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+            <Ionicons name="arrow-back" size={24} color="#4A3B32" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{date}의 기록</Text>
+          <TouchableOpacity onPress={handleSave} style={styles.headerBtn} disabled={isLoading}>
+            {isLoading ? <ActivityIndicator size="small" color="#FF6B6B" /> : <Text style={styles.saveText}>저장</Text>}
+          </TouchableOpacity>
+        </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.dateLabel}>{initialDate}</Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* 미디어 카드 */}
+          <TouchableOpacity style={styles.mediaCard} onPress={() => setIsSheetVisible(true)} activeOpacity={0.9}>
+            {media ? (
+              media.type === 'image' ? (
+                <Image source={{ uri: media.uri }} style={styles.previewMedia} />
+              ) : (
+                <View>
+                  <Video
+                    source={{ uri: media.uri }} style={styles.previewMedia}
+                    resizeMode={ResizeMode.COVER}
+                    isMuted shouldPlay={false} useNativeControls
+                  />
+                  <View style={styles.videoBadge}>
+                    <Ionicons name="videocam" size={12} color="#fff" />
+                    <Text style={styles.videoBadgeText}>동영상</Text>
+                  </View>
+                </View>
+              )
+            ) : (
+              <View style={styles.placeholder}>
+                <View style={styles.iconCircle}><Ionicons name="camera" size={32} color="#D1CCC5" /></View>
+                <Text style={styles.placeholderText}>오늘의 사진이나 영상을 올려주세요</Text>
+                <Text style={styles.placeholderSub}>동영상은 {MAX_VIDEO_SECONDS}초 이내, 50MB 이하</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.imagePicker} onPress={pickImage} activeOpacity={0.8}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.selectedImage} resizeMode="cover" />
-          ) : (
-            <View style={styles.imagePlaceholder}>
-              <Ionicons name="camera-outline" size={40} color={Colors.textHint} />
-              <Text style={styles.imagePlaceholderText}>사진 추가</Text>
+          <Text style={styles.sectionLabel}>오늘 날씨는 어땠나요?</Text>
+          <View style={styles.chipRow}>
+            {WEATHER_OPTIONS.map(opt => (
+              <TouchableOpacity key={opt.code} style={[styles.chip, weather === opt.code && styles.chipSelected]} onPress={() => setWeather(weather === opt.code ? null : opt.code)}>
+                <Text style={styles.chipEmoji}>{opt.emoji}</Text>
+                <Text style={[styles.chipText, weather === opt.code && styles.chipTextSelected]}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.sectionLabel}>나와 반려동물의 기분은?</Text>
+          <View style={styles.moodRow}>
+            <View style={styles.moodGroup}>
+              <Text style={styles.moodSubLabel}>나의 기분</Text>
+              <View style={styles.chipRowSmall}>
+                {MOOD_OPTIONS.map(opt => (
+                  <TouchableOpacity key={opt.code} style={[styles.moodChip, userMood === opt.code && styles.moodChipSelected]} onPress={() => setUserMood(opt.code)}>
+                    <Text style={styles.moodEmoji}>{opt.emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          )}
-        </TouchableOpacity>
+            <View style={styles.moodGroup}>
+              <Text style={styles.moodSubLabel}>반려동물 기분</Text>
+              <View style={styles.chipRowSmall}>
+                {MOOD_OPTIONS.map(opt => (
+                  <TouchableOpacity key={opt.code} style={[styles.moodChip, petMood === opt.code && styles.moodChipSelected]} onPress={() => setPetMood(opt.code)}>
+                    <Text style={styles.moodEmoji}>{opt.emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
 
-        <Input
-          multiline
-          numberOfLines={6}
-          placeholder="오늘의 추억을 기록해보세요..."
-          value={content}
-          onChangeText={setContent}
-          style={styles.textInput}
-          containerStyle={styles.inputContainer}
-          maxLength={200}
-        />
+          <Input
+            label="오늘의 이야기"
+            placeholder="어떤 일이 있었나요?"
+            value={comment} onChangeText={setComment}
+            multiline numberOfLines={5}
+            style={styles.memoInput}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-        {/* 날씨 */}
-        <ChipGroup
-          label="날씨"
-          options={WEATHER_OPTIONS}
-          value={weather}
-          onChange={setWeather}
-        />
+        {/* ======================================== */}
+        {/* 1단계: 갤러리 OR 카메라 선택 모달 */}
+        {/* ======================================== */}
+        <Modal visible={isSheetVisible} transparent animationType="fade">
+          <Pressable style={styles.sheetOverlay} onPress={() => setIsSheetVisible(false)}>
+            <View style={[styles.sheetCard, { paddingBottom: insets.bottom + 20 }]}>
+              <View style={styles.sheetHandle} />
 
-        {/* 사용자 기분 */}
-        <ChipGroup
-          label="내 기분"
-          options={MOOD_OPTIONS}
-          value={userMood}
-          onChange={setUserMood}
-        />
+              {/* 🚨 수정: 카메라 선택 시 서브 모달 띄우기 */}
+              <TouchableOpacity style={styles.sheetItem} onPress={() => {
+                setIsSheetVisible(false);
+                setTimeout(() => setIsCameraSubSheetVisible(true), 300); // 부드러운 전환
+              }}>
+                <Ionicons name="camera-outline" size={24} color="#4A3B32" />
+                <Text style={styles.sheetText}>카메라로 직접 촬영하기</Text>
+              </TouchableOpacity>
 
-        {/* 반려동물 기분 */}
-        <ChipGroup
-          label="반려동물 기분"
-          options={MOOD_OPTIONS}
-          value={petMood}
-          onChange={setPetMood}
-        />
-      </ScrollView>
+              {/* 🚨 수정: 갤러리는 기존처럼 한 번에 (사진/영상 모두 보임) */}
+              <TouchableOpacity style={styles.sheetItem} onPress={() => pickMedia('gallery', 'all')}>
+                <Ionicons name="images-outline" size={24} color="#4A3B32" />
+                <Text style={styles.sheetText}>갤러리에서 선택하기</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
+
+        {/* ======================================== */}
+        {/* 2단계: 카메라 - 사진 OR 영상 선택 서브 모달 */}
+        {/* ======================================== */}
+        <Modal visible={isCameraSubSheetVisible} transparent animationType="fade">
+          <Pressable style={styles.sheetOverlay} onPress={() => setIsCameraSubSheetVisible(false)}>
+            <View style={[styles.sheetCard, { paddingBottom: insets.bottom + 20 }]}>
+              <View style={styles.sheetHandle} />
+
+              {/* 🚨 사진 모드로 카메라 열기 */}
+              <TouchableOpacity style={styles.sheetItem} onPress={() => pickMedia('camera', 'image')}>
+                <Ionicons name="camera-outline" size={24} color="#4A3B32" />
+                <Text style={styles.sheetText}>사진 촬영하기</Text>
+              </TouchableOpacity>
+
+              {/* 🚨 영상 모드로 카메라 열기 */}
+              <TouchableOpacity style={styles.sheetItem} onPress={() => pickMedia('camera', 'video')}>
+                <Ionicons name="videocam-outline" size={24} color="#4A3B32" />
+                <Text style={styles.sheetText}>동영상 촬영하기</Text>
+                <Text style={styles.sheetHint}>최대 {MAX_VIDEO_SECONDS}초</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
-  },
-  headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-  saveText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.primary },
-  scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
-  dateLabel: {
-    fontSize: FontSize.md, color: Colors.textSecondary,
-    marginBottom: Spacing.md, textAlign: 'center',
-  },
-  imagePicker: {
-    width: '100%', height: 220, borderRadius: BorderRadius.xl,
-    overflow: 'hidden', marginBottom: Spacing.lg, ...Shadow.sm,
-  },
-  selectedImage: { width: '100%', height: '100%' },
-  imagePlaceholder: {
-    flex: 1, backgroundColor: Colors.surfaceLight, justifyContent: 'center',
-    alignItems: 'center', borderWidth: 2, borderStyle: 'dashed',
-    borderColor: Colors.border, borderRadius: BorderRadius.xl,
-  },
-  imagePlaceholderText: { marginTop: Spacing.sm, fontSize: FontSize.md, color: Colors.textHint },
-  inputContainer: { marginBottom: Spacing.lg },
-  textInput: { height: 120, textAlignVertical: 'top' },
+  container: { flex: 1, backgroundColor: '#FDFBF7' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
+  headerBtn:   { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontFamily: FontFamily.diary, fontSize: 24, color: '#4A3B32' },
+  saveText:    { fontFamily: FontFamily.diary, fontSize: 22, color: '#FF6B6B' },
+  scrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: 80 },
 
-  // 칩 그룹
-  chipGroupWrap: {
-    marginBottom: Spacing.lg,
+  mediaCard: {
+    backgroundColor: '#FFFFFF', padding: 12, borderRadius: 20, marginBottom: Spacing.xl,
+    borderWidth: 1, borderColor: '#F0EBE1',
+    shadowColor: '#4A3B32', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08, shadowRadius: 10, elevation: 4,
   },
-  fieldLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
+  previewMedia: { width: '100%', height: 300, borderRadius: 12 },
+  videoBadge: {
+    position: 'absolute', top: 16, left: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
   },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipSelected: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
-  },
-  chipEmoji: {
-    fontSize: FontSize.md,
-    marginRight: Spacing.xs,
-  },
-  chipLabel: {
-    fontSize: FontSize.sm,
-    color: Colors.textPrimary,
-  },
-  chipLabelSelected: {
-    color: Colors.primary,
-    fontWeight: FontWeight.semibold,
-  },
+  videoBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+
+  placeholder: { height: 200, justifyContent: 'center', alignItems: 'center' },
+  iconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FDFBF7', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  placeholderText: { fontSize: 14, color: '#A0938A', fontWeight: '500' },
+  placeholderSub:  { fontSize: 11, color: '#D1CCC5', marginTop: 4 },
+
+  sectionLabel: { fontSize: 14, fontWeight: 'bold', color: '#A0938A', marginBottom: 12, marginLeft: 4 },
+  chipRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: Spacing.xl },
+  chip:         { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#F0EBE1' },
+  chipSelected: { backgroundColor: '#FFB5B5', borderColor: '#FFB5B5' },
+  chipEmoji:    { fontSize: 14, marginRight: 4 },
+  chipText:     { fontSize: 12, color: '#4A3B32' },
+  chipTextSelected:{ color: '#FFFFFF', fontWeight: 'bold' },
+
+  moodRow:    { marginBottom: Spacing.xl, gap: 16 },
+  moodGroup:  { gap: 8 },
+  moodSubLabel: { fontSize: 12, color: '#A0938A', marginLeft: 4 },
+  chipRowSmall: { flexDirection: 'row', gap: 6 },
+  moodChip:     { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F0EBE1' },
+  moodChipSelected: { backgroundColor: '#FFFBF0', borderColor: '#FFC85C' },
+  moodEmoji: { fontSize: 20 },
+
+  memoInput: { fontFamily: FontFamily.diary, fontSize: 20, minHeight: 120, textAlignVertical: 'top' },
+
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheetCard:    { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
+  sheetHandle:  { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5DED5', marginBottom: 20 },
+  sheetItem:    { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, gap: 12 },
+  sheetText:    { fontSize: 16, fontWeight: '600', color: '#4A3B32', flex: 1 },
+  sheetHint:    { fontSize: 11, color: '#A0938A' },
 });
 
 export default MemoryCreateScreen;

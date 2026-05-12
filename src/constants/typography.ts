@@ -17,6 +17,9 @@ import { Platform } from 'react-native';
  * iOS: San Francisco, Android: Roboto
  */
 export const FontFamily = {
+  // 🚨 다이어리 전용 감성 폰트 (온글잎 박다현체)
+  diary: 'OngleipParkDahyeon',
+
   // 기본 폰트 (시스템 폰트 사용)
   regular: Platform.select({
     ios: 'System',

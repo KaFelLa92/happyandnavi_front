@@ -22,7 +22,8 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { useFonts } from 'expo-font';
 
 // 컨텍스트 Provider
 import { AuthProvider } from './src/context/AuthContext';
@@ -43,6 +44,20 @@ import { Colors } from './src/constants/colors';
  * 4. Navigation - 화면 라우팅
  */
 export default function App() {
+// 🚨 커스텀 폰트 로드
+  const [fontsLoaded] = useFonts({
+    'OngleipParkDahyeon': require('./assets/fonts/Ownglyph_ParkDaHyun.ttf'),
+  });
+
+if (!fontsLoaded) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        {/* 앱 켜질 때 아주 잠깐 도는 로딩 스피너 */}
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider>

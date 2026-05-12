@@ -9,19 +9,20 @@
  import React, { useState } from 'react';
  import {
    View, Text, StyleSheet, TouchableOpacity,
-   ScrollView, Alert, ActivityIndicator, Switch, Platform
+   ScrollView, Alert, ActivityIndicator, Switch, Platform,
+   KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback,
  } from 'react-native';
  import { SafeAreaView } from 'react-native-safe-area-context';
  import { Ionicons } from '@expo/vector-icons';
  import DateTimePicker from '@react-native-community/datetimepicker';
  import { format, parseISO } from 'date-fns';
  import { Colors } from '@constants/colors';
- import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
+ import { FontFamily, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
  import { Input } from '@components/common';
  import { updatePromise } from '@services/promiseService';
  import { Promise as PromiseType } from '@types';
 
- const COLOR_OPTIONS = [
+const COLOR_OPTIONS = [
    { key: 'blue',   color: '#4FC3F7' },
    { key: 'green',  color: '#81C784' },
    { key: 'orange', color: '#FFB74D' },
@@ -141,7 +142,13 @@
    };
 
    return (
-     <SafeAreaView style={styles.container}>
+     // 🔒 260509: bottom 제외, KeyboardAvoidingView 로 iOS 키보드 위 스크롤
+     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+       <KeyboardAvoidingView
+         style={{ flex: 1 }}
+         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+       >
        {/* 헤더 */}
        <View style={styles.header}>
          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
@@ -156,7 +163,13 @@
          </TouchableOpacity>
        </View>
 
-       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+       <ScrollView
+         contentContainerStyle={styles.scrollContent}
+         showsVerticalScrollIndicator={false}
+         keyboardShouldPersistTaps="handled"
+       >
+         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+         <View>
          <Input label="제목" placeholder="약속 제목" value={title} onChangeText={setTitle} />
 
          {/* 카테고리 */}
@@ -253,7 +266,10 @@
            numberOfLines={4}
            style={styles.memoInput}
          />
+         </View>
+         </TouchableWithoutFeedback>
        </ScrollView>
+       </KeyboardAvoidingView>
      </SafeAreaView>
    );
  };
@@ -265,8 +281,8 @@
      paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
    },
    headerBtn:   { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-   headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-   saveText:    { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.primary },
+   headerTitle: { fontFamily: FontFamily.diary, fontSize: 24, color: Colors.textPrimary },
+   saveText:    { fontFamily: FontFamily.diary, fontSize: 22, color: Colors.primary },
    scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
    label: {
      fontSize: FontSize.sm, fontWeight: FontWeight.medium,
@@ -301,7 +317,7 @@
    colorRow:     { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.lg },
    colorDot:     { width: 32, height: 32, borderRadius: 16 },
    colorDotSelected: { borderWidth: 3, borderColor: Colors.textPrimary, transform: [{ scale: 1.15 }] },
-   memoInput:    { height: 100, textAlignVertical: 'top' },
+   memoInput:    { fontFamily: FontFamily.diary, fontSize: 20, height: 100, textAlignVertical: 'top' },
  });
 
  export default PromiseEditScreen;

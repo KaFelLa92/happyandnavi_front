@@ -9,193 +9,145 @@
  import React, { useState } from 'react';
  import {
    View, Text, StyleSheet, TouchableOpacity,
-   ScrollView, Alert, ActivityIndicator,
+   ScrollView, Alert, ActivityIndicator, Platform,
+   KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback,
  } from 'react-native';
  import { SafeAreaView } from 'react-native-safe-area-context';
  import { Ionicons } from '@expo/vector-icons';
  import { Colors } from '@constants/colors';
- import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
+ import { FontFamily, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
  import { Input } from '@components/common';
  import { updateMemory } from '@services/memoryService';
  import { Memory } from '@types';
 
- const WEATHER_OPTIONS = [
-   { code: 1, label: '맑음',  emoji: '☀️' },
-   { code: 2, label: '흐림',  emoji: '☁️' },
-   { code: 3, label: '비',    emoji: '🌧️' },
-   { code: 4, label: '눈',    emoji: '❄️' },
-   { code: 5, label: '바람',  emoji: '💨' },
- ];
- const MOOD_OPTIONS = [
-   { code: 1, label: '매우 좋음', emoji: '😄' },
-   { code: 2, label: '좋음',     emoji: '🙂' },
-   { code: 3, label: '보통',     emoji: '😐' },
-   { code: 4, label: '나쁨',     emoji: '😟' },
-   { code: 5, label: '매우 나쁨', emoji: '😢' },
- ];
+const WEATHER_OPTIONS = [
+  { code: 1, label: '맑음', emoji: '☀️' }, { code: 2, label: '흐림', emoji: '☁️' },
+  { code: 3, label: '비', emoji: '🌧️' }, { code: 4, label: '눈', emoji: '❄️' }, { code: 5, label: '바람', emoji: '💨' },
+];
+const MOOD_OPTIONS = [
+  { code: 1, label: '매우 좋음', emoji: '😄' }, { code: 2, label: '좋음', emoji: '🙂' },
+  { code: 3, label: '보통', emoji: '😐' }, { code: 4, label: '나쁨', emoji: '😟' }, { code: 5, label: '매우 나쁨', emoji: '😢' },
+];
 
- // ============================================
- // 칩 그룹 공용 컴포넌트
- // ============================================
- const ChipGroup: React.FC<{
-   label: string;
-   options: { code: number; label: string; emoji: string }[];
-   value: number | undefined;
-   onChange: (v: number | undefined) => void;
- }> = ({ label, options, value, onChange }) => (
-   <View style={styles.chipGroupWrap}>
-     <Text style={styles.fieldLabel}>{label}</Text>
-     <View style={styles.chipRow}>
-       {options.map(opt => {
-         const selected = value === opt.code;
-         return (
-           <TouchableOpacity
-             key={opt.code}
-             style={[styles.chip, selected && styles.chipSelected]}
-             onPress={() => onChange(selected ? undefined : opt.code)}
-             activeOpacity={0.8}
-           >
-             <Text style={styles.chipEmoji}>{opt.emoji}</Text>
-             <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
-               {opt.label}
-             </Text>
-           </TouchableOpacity>
-         );
-       })}
-     </View>
-   </View>
- );
+export const MemoryEditScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
+  const original: Memory = route.params.memory;
 
- // ============================================
- // 메인 컴포넌트
- // ============================================
- export const MemoryEditScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
-   const memory: Memory = route.params.memory;
+  const [comment, setComment] = useState(original.memoryComment || '');
+  const [weather, setWeather] = useState<number | null>(original.memoryWeather ?? null);
+  const [userMood, setUserMood] = useState<number | null>(original.userMood ?? null);
+  const [petMood,  setPetMood]  = useState<number | null>(original.petMood ?? null);
+  const [isLoading, setIsLoading] = useState(false);
 
-   const [content,  setContent]  = useState(memory.memoryComment || '');
-   const [weather,  setWeather]  = useState<number | undefined>(memory.memoryWeather ?? undefined);
-   const [userMood, setUserMood] = useState<number | undefined>(memory.userMood ?? undefined);
-   const [petMood,  setPetMood]  = useState<number | undefined>(memory.petMood ?? undefined);
-   const [isLoading, setIsLoading] = useState(false);
+  const getImageUrl = (path?: string) => {
+    if (!path) return undefined;
+    if (path.startsWith('http') && !path.includes('localhost')) return path;
+    const match = path.match(/(\/profile\/.*|\/memory\/.*)/);
+    if (match && match[1]) return `${API_BASE_URL}/uploads${match[1]}`;
+    return path;
+  };
 
-   const handleSave = async () => {
-     if (!content.trim()) { Alert.alert('알림', '내용을 입력해주세요.'); return; }
-     try {
-       setIsLoading(true);
-       await updateMemory(memory.memoryId, {
-         memoryComment: content,
-         memoryWeather: weather,
-         userMood,
-         petMood,
-       });
-       Alert.alert('완료', '수정되었습니다.', [
-         { text: '확인', onPress: () => navigation.goBack() },
-       ]);
-     } catch (e: any) {
-       Alert.alert('오류', e.message || '수정 실패');
-     } finally {
-       setIsLoading(false);
-     }
-   };
+  const handleSave = async () => {
+    try {
+      setIsLoading(true);
+      await updateMemory(original.memoryId, {
+        memoryComment: comment, memoryWeather: weather ?? undefined,
+        userMood: userMood ?? undefined, petMood: petMood ?? undefined,
+      });
+      Alert.alert('완료', '수정되었습니다.', [
+              { text: '확인', onPress: () => navigation.navigate('MemoryCalendar') }
+            ]);
+    } catch (e: any) {
+      Alert.alert('오류', e.message || '수정 실패');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-   return (
-     <SafeAreaView style={styles.container}>
-       {/* 헤더 */}
-       <View style={styles.header}>
-         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-         </TouchableOpacity>
-         <Text style={styles.headerTitle}>추억일기 수정</Text>
-         <TouchableOpacity onPress={handleSave} style={styles.headerBtn} disabled={isLoading}>
-           {isLoading
-             ? <ActivityIndicator size="small" color={Colors.primary} />
-             : <Text style={styles.saveText}>저장</Text>
-           }
-         </TouchableOpacity>
-       </View>
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+          <Ionicons name="close" size={24} color="#4A3B32" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>추억 수정하기</Text>
+        <TouchableOpacity onPress={handleSave} style={styles.headerBtn} disabled={isLoading}>
+          {isLoading ? <ActivityIndicator size="small" color="#FF6B6B" /> : <Text style={styles.saveText}>완료</Text>}
+        </TouchableOpacity>
+      </View>
 
-       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-         {/* 날짜 표시 (수정 불가) */}
-         <Text style={styles.dateLabel}>{memory.memoryDate?.toString()}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* 기존 이미지 고정 표시 (수정 불가 안내) */}
+        <View style={styles.mediaCard}>
+          <Image source={{ uri: getImageUrl(original.memoryUrl) }} style={styles.fixedImage} />
+          <View style={styles.infoBadge}><Text style={styles.infoBadgeText}>사진/영상은 수정할 수 없어요</Text></View>
+        </View>
 
-         {/* 본문 (수정 가능) */}
-         <Input
-           multiline
-           numberOfLines={8}
-           placeholder="추억을 기록해보세요..."
-           value={content}
-           onChangeText={setContent}
-           style={styles.textInput}
-           containerStyle={styles.inputContainer}
-           maxLength={200}
-         />
+        <Text style={styles.sectionLabel}>날씨와 기분 수정</Text>
+        <View style={styles.chipRow}>
+          {WEATHER_OPTIONS.map(opt => (
+            <TouchableOpacity key={opt.code} style={[styles.chip, weather === opt.code && styles.chipSelected]} onPress={() => setWeather(opt.code)}>
+              <Text style={styles.chipEmoji}>{opt.emoji}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-         {/* 날씨 */}
-         <ChipGroup
-           label="날씨"
-           options={WEATHER_OPTIONS}
-           value={weather}
-           onChange={setWeather}
-         />
+        <View style={styles.moodRow}>
+          <View style={styles.moodGroup}>
+            <Text style={styles.moodSubLabel}>내 기분</Text>
+            <View style={styles.chipRowSmall}>
+              {MOOD_OPTIONS.map(opt => (
+                <TouchableOpacity key={opt.code} style={[styles.moodChip, userMood === opt.code && styles.moodChipSelected]} onPress={() => setUserMood(opt.code)}>
+                  <Text style={styles.moodEmoji}>{opt.emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={styles.moodGroup}>
+            <Text style={styles.moodSubLabel}>반려동물</Text>
+            <View style={styles.chipRowSmall}>
+              {MOOD_OPTIONS.map(opt => (
+                <TouchableOpacity key={opt.code} style={[styles.moodChip, petMood === opt.code && styles.moodChipSelected]} onPress={() => setPetMood(opt.code)}>
+                  <Text style={styles.moodEmoji}>{opt.emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
 
-         {/* 내 기분 */}
-         <ChipGroup
-           label="내 기분"
-           options={MOOD_OPTIONS}
-           value={userMood}
-           onChange={setUserMood}
-         />
+        <Input label="내용 수정" value={comment} onChangeText={setComment} multiline numberOfLines={5} style={styles.memoInput} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
 
-         {/* 반려동물 기분 */}
-         <ChipGroup
-           label="반려동물 기분"
-           options={MOOD_OPTIONS}
-           value={petMood}
-           onChange={setPetMood}
-         />
-       </ScrollView>
-     </SafeAreaView>
-   );
- };
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#FDFBF7' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
+  headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontFamily: FontFamily.diary, fontSize: 24, color: '#4A3B32' },
+  saveText: { fontFamily: FontFamily.diary, fontSize: 22, color: '#FF6B6B' },
+  scrollContent: { padding: Spacing.lg },
 
- const styles = StyleSheet.create({
-   container: { flex: 1, backgroundColor: Colors.background },
-   header: {
-     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-     paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
-   },
-   headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-   headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-   saveText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.primary },
-   scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
-   dateLabel: {
-     fontSize: FontSize.md, color: Colors.textSecondary,
-     marginBottom: Spacing.md, textAlign: 'center',
-   },
-   inputContainer: { marginBottom: Spacing.lg },
-   textInput: { height: 160, textAlignVertical: 'top' },
+  mediaCard: { borderRadius: 16, overflow: 'hidden', marginBottom: Spacing.xl, borderWidth: 1, borderColor: '#F0EBE1' },
+  fixedImage: { width: '100%', height: 200, opacity: 0.8 },
+  infoBadge: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(74, 59, 50, 0.6)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  infoBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' },
 
-   // 칩 스타일
-   chipGroupWrap: { marginBottom: Spacing.lg },
-   fieldLabel: {
-     fontSize: FontSize.sm, fontWeight: FontWeight.medium,
-     color: Colors.textSecondary, marginBottom: Spacing.sm,
-   },
-   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-   chip: {
-     flexDirection: 'row', alignItems: 'center', gap: 4,
-     paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
-     borderRadius: BorderRadius.full,
-     backgroundColor: Colors.surfaceLight,
-     borderWidth: 1, borderColor: Colors.border,
-   },
-   chipSelected: {
-     backgroundColor: Colors.primaryLight,
-     borderColor: Colors.primary,
-   },
-   chipEmoji: { fontSize: 15 },
-   chipLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
-   chipLabelSelected: { color: Colors.primary, fontWeight: FontWeight.semibold },
- });
+  sectionLabel: { fontSize: 14, fontWeight: 'bold', color: '#A0938A', marginBottom: 12 },
+  chipRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  chip: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F0EBE1' },
+  chipSelected: { backgroundColor: '#FFFBF0', borderColor: '#FFC85C' },
+  chipEmoji: { fontSize: 18 },
+
+  moodRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+  moodGroup: { gap: 6 },
+  moodSubLabel: { fontSize: 12, color: '#A0938A' },
+  chipRowSmall: { flexDirection: 'row', gap: 4 },
+  moodChip: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F0EBE1' },
+  moodChipSelected: { backgroundColor: '#FFFBF0', borderColor: '#FFC85C' },
+  moodEmoji: { fontSize: 16 },
+
+  memoInput: { fontFamily: FontFamily.diary, fontSize: 20, minHeight: 120, textAlignVertical: 'top' },
+});
 
  export default MemoryEditScreen;
