@@ -6,11 +6,13 @@
  * 추억일기를 수정하는 화면입니다.
  */
 
+ import { API_BASE_URL } from '../../constants/config';
  import React, { useState } from 'react';
  import {
    View, Text, StyleSheet, TouchableOpacity,
    ScrollView, Alert, ActivityIndicator, Platform,
    KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback,
+   Image
  } from 'react-native';
  import { SafeAreaView } from 'react-native-safe-area-context';
  import { Ionicons } from '@expo/vector-icons';
@@ -41,7 +43,7 @@ export const MemoryEditScreen: React.FC<{ navigation: any; route: any }> = ({ na
   const getImageUrl = (path?: string) => {
     if (!path) return undefined;
     if (path.startsWith('http') && !path.includes('localhost')) return path;
-    const match = path.match(/(\/profile\/.*|\/memory\/.*)/);
+    const match = path.match(/(\/profile\/.*|\/memory.*)/);
     if (match && match[1]) return `${API_BASE_URL}/uploads${match[1]}`;
     return path;
   };

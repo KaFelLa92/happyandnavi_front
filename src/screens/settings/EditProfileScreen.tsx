@@ -17,15 +17,15 @@
 
 export const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user, updateUser } = useAuth();
-  const [userName, setUserName] = useState(user?.userName || '');
+  const [petName, setPetName] = useState(user?.petName || '');
   const [phone,    setPhone]    = useState(user?.phone    || '');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSave = async () => {
-    if (!userName.trim()) { Alert.alert('알림', '반려동물 이름을 입력해주세요.'); return; }
+    if (!petName.trim()) { Alert.alert('알림', '반려동물 이름을 입력해주세요.'); return; }
     try {
       setIsLoading(true);
-      const updated = await updateMyInfo({ userName, phone });
+      const updated = await updateMyInfo({ petName, phone });
       updateUser(updated);
       Alert.alert('완료', '프로필이 수정되었습니다. 🐾', [
         { text: '확인', onPress: () => navigation.goBack() },
@@ -63,8 +63,8 @@ export const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
           <Input
             label="반려동물 이름"
             placeholder="이름을 입력해주세요"
-            value={userName}
-            onChangeText={setUserName}
+            value={petName}
+            onChangeText={setPetName}
           />
           <Input
             label="연락처"

@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing } from '@constants/typography';
 import { Input, Button } from '@components/common';
+import { resetPassword } from '@services/authService';
 
 export const ForgotPasswordScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -32,9 +33,8 @@ export const ForgotPasswordScreen: React.FC<{ navigation: any }> = ({ navigation
 
     try {
       setIsLoading(true);
-      // TODO: 백엔드 API 연동 (sendPasswordResetCode 등)
-      await new Promise(res => setTimeout(res, 700));
-      setSent(true);
+      await resetPassword(trimmed); // 임시 비밀번호 발송 API 호출
+      setSent(true); // 성공 화면으로 전환
       Alert.alert(
         '전송 완료',
         `${trimmed} 주소로 비밀번호 재설정 안내를 보냈어요.\n메일함을 확인해주세요. 🐾`,

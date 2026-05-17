@@ -9,7 +9,7 @@
  * 260502 변경: 날씨, 사용자기분, 반려동물기분 입력 UI 추가
  */
 
-import React, { useState, useRef } from 'react'; // 🚨 useRef 추가
+import React, { useState, useRef, useEffect } from 'react'; // 🚨 useRef 추가
 import {
   View, Text, StyleSheet, TouchableOpacity,ScrollView, Image, Alert,
   ActivityIndicator, Modal, Pressable, Platform, KeyboardAvoidingView
@@ -22,9 +22,10 @@ import { Colors } from '@constants/colors';
 import { FontFamily, FontSize, FontWeight, Spacing, Shadow } from '@constants/typography';
 import { Input } from '@components/common';
 import { createMemory } from '@services/memoryService';
+import * as FileSystem from 'expo-file-system';
 
-const MAX_VIDEO_SECONDS = 30;
-const MAX_FILE_BYTES    = 50 * 1024 * 1024; // 50 MB
+const MAX_VIDEO_SECONDS = 5;
+const MAX_FILE_BYTES    = 100 * 1024 * 1024; // 100 MB
 
 const WEATHER_OPTIONS = [
   { code: 1, label: '맑음', emoji: '☀️' }, { code: 2, label: '흐림', emoji: '☁️' },
@@ -70,6 +71,15 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
   const [isLoading,   setIsLoading] = useState(false);
   const [isSheetVisible, setIsSheetVisible] = useState(false);
   const [isCameraSubSheetVisible, setIsCameraSubSheetVisible] = useState(false);
+
+  // 촬영 결과물 화면 반영
+  useEffect(() => {
+    const uri  = route.params?.capturedUri  as string | undefined;
+    const type = route.params?.capturedType as 'photo' | 'video' | undefined;
+    if (uri && type) {
+      setMedia({ uri, type: type === 'video' ? 'video' : 'image' });
+    }
+  }, [route.params?.capturedUri]);
 
   const handleSave = async () => {
     if (!media) { Alert.alert('알림', '사진 또는 영상을 선택해주세요.'); return; }
@@ -284,18 +294,30 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
             <View style={[styles.sheetCard, { paddingBottom: insets.bottom + 20 }]}>
               <View style={styles.sheetHandle} />
 
-              {/* 🚨 사진 모드로 카메라 열기 */}
-              <TouchableOpacity style={styles.sheetItem} onPress={() => pickMedia('camera', 'image')}>
-                <Ionicons name="camera-outline" size={24} color="#4A3B32" />
-                <Text style={styles.sheetText}>사진 촬영하기</Text>
-              </TouchableOpacity>
+              {/* 사진 모드로 CameraScreen 열기 */}
+                <TouchableOpacity
+                  style={styles.sheetItem}
+                  onPress={() => {
+                    setIsCameraSubSheetVisible(false);
+                    navigation.navigate('Camera', { date, mode: 'photo' });
+                  }}
+                >
+                  <Ionicons name="camera-outline" size={24} color="#4A3B32" />
+                  <Text style={styles.sheetText}>사진 촬영하기</Text>
+                </TouchableOpacity>
 
-              {/* 🚨 영상 모드로 카메라 열기 */}
-              <TouchableOpacity style={styles.sheetItem} onPress={() => pickMedia('camera', 'video')}>
-                <Ionicons name="videocam-outline" size={24} color="#4A3B32" />
-                <Text style={styles.sheetText}>동영상 촬영하기</Text>
-                <Text style={styles.sheetHint}>최대 {MAX_VIDEO_SECONDS}초</Text>
-              </TouchableOpacity>
+                {/* 영상 모드로 CameraScreen 열기 */}
+                <TouchableOpacity
+                  style={styles.sheetItem}
+                  onPress={() => {
+                    setIsCameraSubSheetVisible(false);
+                    navigation.navigate('Camera', { date, mode: 'video' });
+                  }}
+                >
+                  <Ionicons name="videocam-outline" size={24} color="#4A3B32" />
+                  <Text style={styles.sheetText}>동영상 촬영하기</Text>
+                  <Text style={styles.sheetHint}>최대 5초</Text>
+                </TouchableOpacity>
             </View>
           </Pressable>
         </Modal>

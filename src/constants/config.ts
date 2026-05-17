@@ -65,6 +65,7 @@ export const API_ENDPOINTS = {
     // 소셜 로그인
     KAKAO_LOGIN: '/api/auth/kakao',
     GOOGLE_LOGIN: '/api/auth/google',
+    NAVER_LOGIN: '/api/auth/naver',
   },
   // 사용자 관련
   USER: {
@@ -111,13 +112,13 @@ export const API_ENDPOINTS = {
  */
 export const KAKAO_CONFIG = {
   // 네이티브 앱 키 (Android/iOS 앱에서 사용)
-  NATIVE_APP_KEY: 'YOUR_KAKAO_NATIVE_APP_KEY',
+  NATIVE_APP_KEY: '135f586087a7a383e664b0b4680d9713',
   // REST API 키 (서버에서 사용)
-  REST_API_KEY: '1f54735975efc268bb021af3f1c41758',
+  REST_API_KEY: 'dcfd1f4f024b3fcd4ce75e70364ab780',
   // JavaScript 키 (웹에서 사용)
-  JAVASCRIPT_KEY: 'YOUR_KAKAO_JAVASCRIPT_KEY',
+  JAVASCRIPT_KEY: '9499d95dd58d3f7f60d8374c221baec8',
   // 리다이렉트 URI
-  REDIRECT_URI: 'kakao{YOUR_NATIVE_APP_KEY}://oauth',
+  REDIRECT_URI: 'kakao135f586087a7a383e664b0b4680d9713://oauth',
 } as const;
 
 /**

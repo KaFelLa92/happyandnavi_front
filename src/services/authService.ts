@@ -177,6 +177,16 @@ export const findEmailByPhone = async (phone: string): Promise<string> => {
   }
 };
 
+/**
+ * 이메일로 임시 비밀번호 발송 요청
+ */
+export const resetPassword = async (email: string): Promise<void> => {
+  const response = await post<void>('/api/auth/reset-password', { email });
+  if (!response.success) {
+    throw new Error(response.message || '비밀번호 재설정에 실패했습니다.');
+  }
+};
+
 // ============================================
 // 소셜 로그인 관련 함수
 // ============================================
@@ -249,6 +259,68 @@ export const googleLogin = async (idToken: string): Promise<LoginResponse> => {
     throw new Error(response.message || '구글 로그인에 실패했습니다.');
   } catch (error: any) {
     debugLog('구글 로그인 실패:', error.message);
+    throw error;
+  }
+};
+
+/**
+ * 네이버 로그인 처리
+ */
+export const naverLogin = async (accessToken: string): Promise<LoginResponse> => {
+  try {
+    debugLog('네이버 로그인 시도');
+
+    const response = await post<LoginResponse>(
+      API_ENDPOINTS.AUTH.NAVER_LOGIN, // config.ts에 이 주소가 등록되어 있어야 합니다.
+      { accessToken }
+    );
+
+    if (response.success && response.data) {
+      await saveTokens(response.data);
+      await saveUserInfo({
+        userId: response.data.userId,
+        email: response.data.email,
+        petName: response.data.petName,
+      } as User);
+
+      debugLog('네이버 로그인 성공');
+      return response.data;
+    }
+
+    throw new Error(response.message || '네이버 로그인에 실패했습니다.');
+  } catch (error: any) {
+    debugLog('네이버 로그인 실패:', error.message);
+    throw error;
+  }
+};
+
+/**
+ * 애플 로그인 처리
+ */
+export const appleLogin = async (identityToken: string): Promise<LoginResponse> => {
+  try {
+    debugLog('애플 로그인 시도');
+
+    const response = await post<LoginResponse>(
+      '/api/auth/apple', // config.ts에 추가하셨다면 API_ENDPOINTS.AUTH.APPLE_LOGIN 사용
+      { identityToken }
+    );
+
+    if (response.success && response.data) {
+      await saveTokens(response.data);
+      await saveUserInfo({
+        userId: response.data.userId,
+        email: response.data.email,
+        petName: response.data.petName,
+      } as User);
+
+      debugLog('애플 로그인 성공');
+      return response.data;
+    }
+
+    throw new Error(response.message || '애플 로그인에 실패했습니다.');
+  } catch (error: any) {
+    debugLog('애플 로그인 실패:', error.message);
     throw error;
   }
 };

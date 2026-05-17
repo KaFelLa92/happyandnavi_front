@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing } from '@constants/typography';
 import { Input, Button } from '@components/common';
+import { findEmailByPhone } from '@services/authService';
 
 const maskEmail = (email: string): string => {
   const [name, domain] = email.split('@');
@@ -36,12 +37,8 @@ export const FindIdScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
     try {
       setIsLoading(true);
-      // TODO: 백엔드 API 연동 (findEmailByPhone 등)
-      await new Promise(res => setTimeout(res, 700));
-
-      // 데모 결과
-      const demoEmail = 'happy***@example.com';
-      setFoundEmail(demoEmail);
+      const maskedEmail = await findEmailByPhone(phone.trim());
+      setFoundEmail(maskedEmail);
     } catch (e: any) {
       Alert.alert('오류', e.message || '조회에 실패했어요.');
     } finally {

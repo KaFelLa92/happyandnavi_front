@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFBF0',
     justifyContent: 'center', alignItems: 'center',
   },
-  monthText: { fontFamily: FontFamily.diary, fontSize: 25, color: '#4A3B32' },
+  monthText: { fontFamily: FontFamily.diary, fontSize: 18, color: '#4A3B32' },
 
   weekHeader:  { flexDirection: 'row', justifyContent: 'space-around', marginBottom: Spacing.xs },
   weekDayText: { width: CELL_W, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: '#A0938A' },

@@ -5,3 +5,6 @@
  */
 
 export * from './SettingsScreen';
+export * from './EditProfileScreen';
+export * from './ChangePasswordScreen';
+export * from './DeleteAccountScreen';

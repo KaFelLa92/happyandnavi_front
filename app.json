@@ -7,6 +7,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#FAF3E0"
     },
     "assetBundlePatterns": [
@@ -17,8 +19,10 @@
       "bundleIdentifier": "com.happyandnavi.app",
       "infoPlist": {
         "NSCameraUsageDescription": "반려동물 사진을 촬영하기 위해 카메라 접근이 필요합니다.",
-        "NSPhotoLibraryUsageDescription": "반려동물 사진을 선택하기 위해 사진첩 접근이 필요합니다."
-      }
+        "NSPhotoLibraryUsageDescription": "반려동물 사진을 선택하기 위해 사진첩 접근이 필요합니다.",
+        "NSMicrophoneUsageDescription": "동영상 녹화를 위해 마이크 접근이 필요합니다."
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -27,6 +31,7 @@
       "package": "com.happyandnavi.app",
       "permissions": [
         "CAMERA",
+        "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ]
@@ -34,7 +39,23 @@
     "scheme": "happyandnavi",
     "plugins": [
       "@react-native-community/datetimepicker",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-camera",
+      [
+        "@react-native-seoul/kakao-login",
+        {
+          "kakaoAppKey": "135f586087a7a383e664b0b4680d9713",
+          "overrideKakaoSDKVersion": "2.20.1",
+          "kotlinVersion": "2.1.0"
+        }
+      ],
+      "@react-native-google-signin/google-signin",
+      [
+        "@react-native-seoul/naver-login",
+        {
+          "urlScheme": "happyandnavi"
+        }
+      ]
     ]
   }
 }

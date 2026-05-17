@@ -20,14 +20,16 @@ import {
   addMonths, subMonths, isSameDay, isToday as dateFnsIsToday, isAfter, isBefore, startOfDay,
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Spacing } from '@constants/typography';
+import { FontFamily, Spacing } from '@constants/typography';
 import { LoadingSpinner } from '@components/common';
 import { getCalendarData } from '@services/memoryService';
 import { MemoryCalendarItem } from '@types';
-import { FontFamily } from '@constants/typography';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 
 const { width } = Dimensions.get('window');
 const CELL_W = (width - Spacing.lg * 2 - Spacing.lg * 2 - 10) / 7;
+// 동영상 URL → 썸네일 URI 캐시 (컴포넌트 외부)
+const thumbnailCache: Record<string, string> = {};
 
 interface CalendarDay {
   date: Date; day: number; isCurrentMonth: boolean;
@@ -42,9 +44,48 @@ const isVideoUrl = (url?: string): boolean => {
 const getImageUrl = (path?: string): string | undefined => {
   if (!path) return undefined;
   if (path.startsWith('http') && !path.includes('localhost')) return path;
-  const match = path.match(/(\/profile\/.*|\/memory\/.*)/);
+  const match = path.match(/(\/profile\/.*|\/memory.*)/);
   if (match && match[1]) return `${API_BASE_URL}/uploads${match[1]}`;
   return path;
+};
+
+const getVideoThumbnail = async (videoUrl: string): Promise<string | null> => {
+  if (thumbnailCache[videoUrl]) return thumbnailCache[videoUrl];
+  try {
+    const { uri } = await VideoThumbnails.getThumbnailAsync(videoUrl, { time: 0 });
+    thumbnailCache[videoUrl] = uri;
+    return uri;
+  } catch {
+    return null;
+  }
+};
+
+const MemoryThumbCell: React.FC<{ url: string; isVideo: boolean }> = ({ url, isVideo }) => {
+  const [displayUri, setDisplayUri] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!isVideo) {
+      setDisplayUri(getImageUrl(url) ?? null);
+    } else {
+      const resolved = getImageUrl(url);
+      if (resolved) {
+        getVideoThumbnail(resolved).then(thumb => setDisplayUri(thumb ?? resolved));
+      }
+    }
+  }, [url, isVideo]);
+
+  if (!displayUri) return <View style={styles.memoryCell} />;
+
+  return (
+    <View style={styles.memoryCell}>
+      <Image source={{ uri: displayUri }} style={styles.thumbnail} resizeMode="cover" />
+      {isVideo && (
+        <View style={styles.videoBadge}>
+          <Ionicons name="videocam" size={8} color="#FFF" />
+        </View>
+      )}
+    </View>
+  );
 };
 
 export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
@@ -251,19 +292,10 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
                 activeOpacity={0.7}
               >
                 {item.memory ? (
-                  <View style={styles.memoryCell}>
-                    <Image
-                      source={{ uri: getImageUrl(item.memory.thumbnailUrl) }}
-                      style={styles.thumbnail}
-                      resizeMode="cover"
-                    />
-                    {/* 동영상이면 ▶ 오버레이 */}
-                    {isVideo && (
-                      <View style={styles.videoOverlay}>
-                        <Ionicons name="play" size={14} color="#FFF" />
-                      </View>
-                    )}
-                  </View>
+                  <MemoryThumbCell
+                    url={item.memory.thumbnailUrl}
+                    isVideo={isVideo}
+                  />
                 ) : (
                   <Text style={[
                     styles.dayText,
@@ -292,7 +324,7 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
         />
       </TouchableOpacity>
     </SafeAreaView>
-  );
+  );diary
 };
 
 const styles = StyleSheet.create({
@@ -364,10 +396,15 @@ const styles = StyleSheet.create({
     borderRadius: 10, overflow: 'hidden',
   },
   thumbnail: { width: '100%', height: '100%' },
-  videoOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    justifyContent: 'center', alignItems: 'center',
+  videoBadge: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      borderRadius: 4,
+      padding: 3,
+      justifyContent: 'center',
+      alignItems: 'center',
   },
 
   fab: {

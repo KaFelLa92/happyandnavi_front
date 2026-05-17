@@ -15,11 +15,11 @@
  import { SafeAreaView } from 'react-native-safe-area-context';
  import { Ionicons } from '@expo/vector-icons';
  import { Colors } from '@constants/colors';
- import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
+ import { FontFamily, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
  import { LoadingSpinner } from '@components/common';
  import { getMemory, deleteMemory } from '@services/memoryService';
  import { Memory } from '@types';
- import { FontFamily } from '@constants/typography';
+ import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 
  // ============================================
  // 코드표 (MemoryCreateScreen 과 동일)
@@ -42,6 +42,10 @@
  const findOption = (options: typeof WEATHER_OPTIONS, code?: number | null) =>
    options.find(o => o.code === code) ?? null;
 
+
+  const isVideoUrl = (url?: string): boolean =>
+   /\.(mp4|mov|m4v|avi|webm|mkv)(\?|$)/i.test(url ?? '');
+
  // ============================================
  // 컴포넌트
  // ============================================
@@ -62,7 +66,7 @@
 
         // 2. 정규식을 사용하여 진짜 경로('/profile/...' 또는 '/memory/...')만 쏙 뽑아냅니다.
         // 앞에 http://localhost:8080/uploads/uploads/ 가 몇 개가 붙어있든 다 무시합니다!
-        const match = path.match(/(\/profile\/.*|\/memory\/.*)/);
+        const match = path.match(/(\/profile\/.*|\/memory.*)/);
 
         if (match && match[1]) {
           // 3. 현재 노트북 IP(API_BASE_URL) + /uploads + 진짜 경로 조립
@@ -132,7 +136,22 @@
            {/* 폴라로이드 감성의 사진 카드 */}
            {memory?.memoryUrl && (
              <View style={styles.polaroidCard}>
-               <Image source={{ uri: getImageUrl(memory.memoryUrl) }} style={styles.image} resizeMode="cover" />
+               {isVideoUrl(memory.memoryUrl) ? (
+                 <Video
+                   source={{ uri: getImageUrl(memory.memoryUrl) }}
+                   style={styles.image}
+                   resizeMode={ResizeMode.COVER}
+                   useNativeControls          // ← iOS/Android 기본 재생 컨트롤
+                   shouldPlay={false}         // 자동 재생 X
+                   isLooping={false}
+                 />
+               ) : (
+                 <Image
+                   source={{ uri: getImageUrl(memory.memoryUrl) }}
+                   style={styles.image}
+                   resizeMode="cover"
+                 />
+               )}
              </View>
            )}
 

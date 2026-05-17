@@ -49,8 +49,7 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const greeting = useMemo(
     () => getGreeting(user?.petName ?? '', (user as any)?.regDate),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [user?.petName, (user as any)?.regDate],
   );
 
   const getImageUrl = (path?: string) => {

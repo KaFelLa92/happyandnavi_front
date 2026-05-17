@@ -10,6 +10,8 @@
  *   - Splash
  *   - Login
  *   - Signup
+ *   - FindId
+ *   - ForgotPassword
  * 
  * - 메인 탭 (로그인 후)
  *   - Home (홈 스택)
@@ -23,6 +25,7 @@
  *     - MemoryDetail
  *     - MemoryCreate
  *     - MemoryEdit
+ *     - CameraScreen
  *   - Promise (약속일기 스택)
  *     - PromiseCalendar
  *     - PromiseDetail
@@ -55,6 +58,7 @@ import { MemoryCalendarScreen } from '../screens/memory/MemoryCalendarScreen';
 import { MemoryCreateScreen } from '../screens/memory/MemoryCreateScreen';
 import { MemoryDetailScreen } from '../screens/memory/MemoryDetailScreen';
 import { MemoryEditScreen } from '../screens/memory/MemoryEditScreen';
+import { CameraScreen } from '../screens/memory/CameraScreen';
 import { PromiseCalendarScreen } from '../screens/promise/PromiseCalendarScreen';
 import { PromiseCreateScreen } from '../screens/promise/PromiseCreateScreen';
 import { PromiseDetailScreen } from '../screens/promise/PromiseDetailScreen';
@@ -83,6 +87,7 @@ const MemoryStackNavigator: React.FC = () => (
     <MemoryStack.Screen name="MemoryDetail"   component={MemoryDetailScreen} />
     <MemoryStack.Screen name="MemoryCreate"   component={MemoryCreateScreen} />
     <MemoryStack.Screen name="MemoryEdit"     component={MemoryEditScreen} />
+    <MemoryStack.Screen name="Camera"         component={CameraScreen}  options={{ presentation: 'fullScreenModal' }} />
     <MemoryStack.Screen name="NotFound"       component={NotFoundScreen} />
   </MemoryStack.Navigator>
 );

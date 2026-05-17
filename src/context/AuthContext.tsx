@@ -121,9 +121,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // 액션들
   // ========================================
   const login = useCallback(async (request: LoginRequest) => {
-    const response: LoginResponse = await loginService(request);
-    setState({ isAuthenticated: true, user: response.user, isLoading: false });
-  }, []);
+      // 1. 로그인 요청 (authService 내에서 토큰이 SecureStore에 저장됨)
+      await loginService(request);
+
+      // 2. 추가된 핵심 코드: 토큰을 바탕으로 꽉 찬 내 정보(펫 이름, 사진 등) 다시 조회!
+      const fullUser = await getMyInfo();
+
+      // 3. 상태 업데이트 및 캐시 저장
+      await saveUserInfo(fullUser);
+      setState({ isAuthenticated: true, user: fullUser, isLoading: false });
+    }, []);
 
   const signup = useCallback(async (request: SignupRequest) => {
     return await signupService(request);
@@ -135,14 +142,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const kakaoLogin = useCallback(async (accessToken: string) => {
-    const response = await kakaoLoginService(accessToken);
-    setState({ isAuthenticated: true, user: response.user, isLoading: false });
-  }, []);
+      // 1. 카카오 로그인 요청 (토큰 저장됨)
+      await kakaoLoginService(accessToken);
+
+      // 2. 내 정보 다시 조회
+      const fullUser = await getMyInfo();
+
+      // 3. 상태 업데이트
+      await saveUserInfo(fullUser);
+      setState({ isAuthenticated: true, user: fullUser, isLoading: false });
+    }, []);
 
   const googleLogin = useCallback(async (idToken: string) => {
-    const response = await googleLoginService(idToken);
-    setState({ isAuthenticated: true, user: response.user, isLoading: false });
-  }, []);
+      // 1. 구글 로그인 요청 (토큰 저장됨)
+      await googleLoginService(idToken);
+
+      // 2. 내 정보 다시 조회
+      const fullUser = await getMyInfo();
+
+      // 3. 상태 업데이트
+      await saveUserInfo(fullUser);
+      setState({ isAuthenticated: true, user: fullUser, isLoading: false });
+    }, []);
 
   const updateUser = useCallback((user: User) => {
     saveUserInfo(user).catch(() => {});

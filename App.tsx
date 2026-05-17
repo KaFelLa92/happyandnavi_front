@@ -47,6 +47,7 @@ export default function App() {
 // 🚨 커스텀 폰트 로드
   const [fontsLoaded] = useFonts({
     'OngleipParkDahyeon': require('./assets/fonts/Ownglyph_ParkDaHyun.ttf'),
+    'Roboto-Medium': require('./assets/fonts/Roboto-Medium.ttf'),
   });
 
 if (!fontsLoaded) {
