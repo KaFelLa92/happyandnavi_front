@@ -20,7 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { Colors } from '@constants/colors';
 import { FontFamily, FontSize, FontWeight, Spacing, Shadow } from '@constants/typography';
-import { Input } from '@components/common';
+import { Input, CustomAlert } from '@components/common';
 import { createMemory } from '@services/memoryService';
 import * as FileSystem from 'expo-file-system';
 
@@ -62,7 +62,8 @@ const validateFileSize = async (uri: string): Promise<{ ok: boolean; reason?: st
 export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { date } = route.params;
-
+  const scrollViewRef = useRef<ScrollView>(null); // 스크롤뷰 조종용 리모컨 생성
+  const [isMemoFocused, setIsMemoFocused] = useState(false);
   const [comment,     setComment]   = useState('');
   const [weather,     setWeather]   = useState<number | null>(null);
   const [userMood,    setUserMood]  = useState<number | null>(null);
@@ -70,7 +71,19 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
   const [media,       setMedia]     = useState<{ uri: string; type: 'image' | 'video' } | null>(null);
   const [isLoading,   setIsLoading] = useState(false);
   const [isSheetVisible, setIsSheetVisible] = useState(false);
-  const [isCameraSubSheetVisible, setIsCameraSubSheetVisible] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertConfirmHandler, setAlertOnConfirm] = useState<(() => void) | undefined>(undefined);
+  const [alertCloseHandler,   setAlertOnClose]   = useState<(() => void) | undefined>(undefined);
+
+  const triggerAlert = (title: string, message: string, onConfirm?: () => void) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertOnConfirm(onConfirm ? () => onConfirm : undefined);
+    setAlertOnClose(onClose ? () => onClose : undefined);
+    setAlertVisible(true);
+  };
 
   // 촬영 결과물 화면 반영
   useEffect(() => {
@@ -82,7 +95,7 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
   }, [route.params?.capturedUri]);
 
   const handleSave = async () => {
-    if (!media) { Alert.alert('알림', '사진 또는 영상을 선택해주세요.'); return; }
+    if (!media) { triggerAlert('알림', '사진 또는 영상을 선택해주세요. 🐾'); return; }
     try {
       setIsLoading(true);
       await createMemory(
@@ -95,11 +108,9 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
         },
         media.uri,
       );
-      Alert.alert('완료', '추억이 기록되었습니다. 🐾', [
-        { text: '확인', onPress: () => navigation.goBack() },
-      ]);
+      triggerAlert('완료', '추억이 기록되었습니다. 🐾', undefined, () => navigation.goBack());
     } catch (e: any) {
-      Alert.alert('오류', e.message || '저장 실패');
+      triggerAlert('오류', e.message || '저장 실패');
     } finally {
       setIsLoading(false);
     }
@@ -109,7 +120,6 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
      console.log(`\n📸 [MediaPicker] 시작 - source: ${source}, type: ${mediaType}`);
 
      // 서브 모달 닫기
-     setIsCameraSubSheetVisible(false);
      setIsSheetVisible(false);
 
      // 1. 권한 확인
@@ -185,7 +195,8 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          ref={scrollViewRef}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: isMemoFocused ? 400 : 80 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -256,6 +267,13 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
             value={comment} onChangeText={setComment}
             multiline numberOfLines={5}
             style={styles.memoInput}
+            onFocus={() => {
+              setIsMemoFocused(true); // 🚨 여백 늘리기
+              setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 300);
+            }}
+            onBlur={() => setIsMemoFocused(false)} // 🚨 입력 끝나면 여백 원래대로 복구
           />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -269,13 +287,18 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
               <View style={styles.sheetHandle} />
 
               {/* 🚨 수정: 카메라 선택 시 서브 모달 띄우기 */}
-              <TouchableOpacity style={styles.sheetItem} onPress={() => {
-                setIsSheetVisible(false);
-                setTimeout(() => setIsCameraSubSheetVisible(true), 300); // 부드러운 전환
-              }}>
-                <Ionicons name="camera-outline" size={24} color="#4A3B32" />
-                <Text style={styles.sheetText}>카메라로 직접 촬영하기</Text>
-              </TouchableOpacity>
+              <TouchableOpacity
+                  style={styles.sheetItem}
+                  onPress={() => {
+                    setIsSheetVisible(false);
+                    navigation.navigate('Camera', { date, mode: 'photo' });
+                  }}
+                >
+                  <Ionicons name="camera-outline" size={24} color="#4A3B32" />
+                  <Text style={styles.sheetText}>카메라로 직접 촬영하기</Text>
+                  {/* 🚨 추가: 두 모드 모두 지원한다는 안내 문구 */}
+                  <Text style={styles.sheetHint}>사진 · 동영상(5초)</Text>
+                </TouchableOpacity>
 
               {/* 🚨 수정: 갤러리는 기존처럼 한 번에 (사진/영상 모두 보임) */}
               <TouchableOpacity style={styles.sheetItem} onPress={() => pickMedia('gallery', 'all')}>
@@ -285,42 +308,7 @@ export const MemoryCreateScreen: React.FC<{ navigation: any; route: any }> = ({ 
             </View>
           </Pressable>
         </Modal>
-
-        {/* ======================================== */}
-        {/* 2단계: 카메라 - 사진 OR 영상 선택 서브 모달 */}
-        {/* ======================================== */}
-        <Modal visible={isCameraSubSheetVisible} transparent animationType="fade">
-          <Pressable style={styles.sheetOverlay} onPress={() => setIsCameraSubSheetVisible(false)}>
-            <View style={[styles.sheetCard, { paddingBottom: insets.bottom + 20 }]}>
-              <View style={styles.sheetHandle} />
-
-              {/* 사진 모드로 CameraScreen 열기 */}
-                <TouchableOpacity
-                  style={styles.sheetItem}
-                  onPress={() => {
-                    setIsCameraSubSheetVisible(false);
-                    navigation.navigate('Camera', { date, mode: 'photo' });
-                  }}
-                >
-                  <Ionicons name="camera-outline" size={24} color="#4A3B32" />
-                  <Text style={styles.sheetText}>사진 촬영하기</Text>
-                </TouchableOpacity>
-
-                {/* 영상 모드로 CameraScreen 열기 */}
-                <TouchableOpacity
-                  style={styles.sheetItem}
-                  onPress={() => {
-                    setIsCameraSubSheetVisible(false);
-                    navigation.navigate('Camera', { date, mode: 'video' });
-                  }}
-                >
-                  <Ionicons name="videocam-outline" size={24} color="#4A3B32" />
-                  <Text style={styles.sheetText}>동영상 촬영하기</Text>
-                  <Text style={styles.sheetHint}>최대 5초</Text>
-                </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Modal>
+        <CustomAlert visible={alertVisible} title={alertTitle} message={alertMessage} onClose={() => { setAlertVisible(false); alertCloseHandler?.(); setAlertOnClose(undefined); }} onConfirm={alertConfirmHandler} />
     </SafeAreaView>
   );
 };

@@ -5,12 +5,14 @@
  *
  */
 
- import React, { useState } from 'react';
- import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+ import React, { useState, useRef } from 'react';
+ import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView,
+     KeyboardAvoidingView, Platform,
+ } from 'react-native';
  import { SafeAreaView } from 'react-native-safe-area-context';
  import { Ionicons } from '@expo/vector-icons';
  import { Spacing } from '@constants/typography';
- import { Input, Button } from '@components/common';
+ import { Input, Button, CustomAlert } from '@components/common';
  import { useAuth } from '@context/AuthContext';
  import { updateMyInfo } from '@services/userService';
  import { FontFamily } from '@constants/typography';
@@ -20,25 +22,39 @@ export const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
   const [petName, setPetName] = useState(user?.petName || '');
   const [phone,    setPhone]    = useState(user?.phone    || '');
   const [isLoading, setIsLoading] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertConfirmHandler, setAlertOnConfirm] = useState<(() => void) | undefined>(undefined);
+  const [alertCloseHandler, setAlertOnClose] = useState<(() => void) | undefined>(undefined);
+
+  const triggerAlert = (title: string, message: string, onConfirm?: () => void) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertOnConfirm(onConfirm ? () => onConfirm : undefined);
+    setAlertOnClose(onClose ? () => onClose : undefined);
+    setAlertVisible(true);
+  };
 
   const handleSave = async () => {
-    if (!petName.trim()) { Alert.alert('알림', '반려동물 이름을 입력해주세요.'); return; }
+    if (!petName.trim()) { triggerAlert('알림', '반려동물 이름을 입력해주세요.'); return; }
     try {
       setIsLoading(true);
       const updated = await updateMyInfo({ petName, phone });
       updateUser(updated);
-      Alert.alert('완료', '프로필이 수정되었습니다. 🐾', [
-        { text: '확인', onPress: () => navigation.goBack() },
-      ]);
+      triggerAlert('완료', '프로필이 수정되었습니다. 🐾', undefined, () => navigation.goBack());
     } catch (e: any) {
-      Alert.alert('오류', e.message || '수정 실패');
+      triggerAlert('오류', e.message || '수정 실패');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
           <Ionicons name="arrow-back" size={24} color="#4A3B32" />
@@ -47,7 +63,16 @@ export const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
         <View style={styles.headerBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+          ref={scrollViewRef} // 🚨 2. 리모컨 연결
+          contentContainerStyle={[
+            styles.scrollContent,
+            // 🚨 3. 포커스 시 하단 여백을 넉넉하게 확장 (기존 여백은 Spacing.lg 등 화면에 맞게)
+            { paddingBottom: isInputFocused ? 400 : Spacing.lg }
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* 아바타 영역 */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarCircle}>
@@ -65,6 +90,14 @@ export const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
             placeholder="이름을 입력해주세요"
             value={petName}
             onChangeText={setPetName}
+            onFocus={() => {
+                setIsInputFocused(true);
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 300);
+              }}
+              // 🚨 5. 입력 끝나면 여백 원상복구
+              onBlur={() => setIsInputFocused(false)}
           />
           <Input
             label="연락처"
@@ -72,6 +105,14 @@ export const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
+            onFocus={() => {
+                setIsInputFocused(true);
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 300);
+              }}
+              // 🚨 5. 입력 끝나면 여백 원상복구
+              onBlur={() => setIsInputFocused(false)}
           />
         </View>
 
@@ -82,6 +123,7 @@ export const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
           style={styles.saveBtn}
         />
       </ScrollView>
+      <CustomAlert visible={alertVisible} title={alertTitle} message={alertMessage} onClose={() => { setAlertVisible(false); alertCloseHandler?.(); setAlertOnClose(undefined); }} onConfirm={alertConfirmHandler} />
     </SafeAreaView>
   );
 };

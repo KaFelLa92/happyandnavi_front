@@ -275,7 +275,7 @@ export const PromiseCalendarScreen: React.FC<{ navigation: any }> = ({ navigatio
       </TouchableOpacity>
 
       {/* ===== 모달 (모달-우선 정책) ===== */}
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setModalVisible(false)} />
 
         <View style={[styles.modalCard, { paddingBottom: insets.bottom + 8 }]}>
@@ -375,12 +375,12 @@ const styles = StyleSheet.create({
   weekHeader:  { flexDirection: 'row', justifyContent: 'space-around', marginBottom: Spacing.xs },
   weekDayText: { width: CELL_W, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: '#A0938A' },
 
-  gridContainer: { flex: 1, justifyContent: 'space-between' },
-  weekRow: { marginBottom: 2 },
+  gridContainer: { flex: 1, justifyContent: 'space-around' },
+  weekRow: { marginBottom: 4 },
   dateNumRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  emptyCell:  { width: CELL_W, height: 32 },
+  emptyCell:  { width: CELL_W, height: 36 },
   dateNumCell: {
-    width: CELL_W, height: 32,
+    width: CELL_W, height: 36,
     justifyContent: 'center', alignItems: 'center', borderRadius: 12,
   },
   todayNumCell: { backgroundColor: '#FFFBF0' },

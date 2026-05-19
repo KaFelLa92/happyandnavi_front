@@ -212,8 +212,10 @@ export const deleteAccount = async (password?: string): Promise<void> => {
   try {
     debugLog('회원 탈퇴 시도');
     // DELETE 요청에 body를 포함하기 위해 axios를 직접 사용
-    const response = await del<void>(API_ENDPOINTS.USER.DELETE);
-    if (response.success) {
+    const response = await api.delete<ApiResponse<void>>(API_ENDPOINTS.USER.DELETE, {
+          data: { password: password } // 백엔드의 DeleteAccountRequest와 매핑됨
+        });
+    if (response.data && response.data.success) {
       debugLog('회원 탈퇴 완료');
       return;
     }

@@ -181,9 +181,19 @@ export const findEmailByPhone = async (phone: string): Promise<string> => {
  * 이메일로 임시 비밀번호 발송 요청
  */
 export const resetPassword = async (email: string): Promise<void> => {
-  const response = await post<void>('/api/auth/reset-password', { email });
-  if (!response.success) {
-    throw new Error(response.message || '비밀번호 재설정에 실패했습니다.');
+  try {
+    const response = await post<void>('/api/auth/reset-password', { email });
+    if (!response.success) {
+      throw new Error(response.message || '비밀번호 재설정에 실패했습니다.');
+    }
+  } catch (error: any) {
+    // 🚨 백엔드에서 보낸 구체적인 에러 메시지(예: SSO 계정 불가) 추출
+    const serverMessage = error?.response?.data?.message;
+    if (serverMessage) {
+      throw new Error(serverMessage);
+    }
+    // 추출 실패 시 원래 에러를 던짐
+    throw error;
   }
 };
 

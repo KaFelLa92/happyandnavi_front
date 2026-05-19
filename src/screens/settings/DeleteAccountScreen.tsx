@@ -5,12 +5,12 @@
  *
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing } from '@constants/typography';
-import { Input, Button } from '@components/common';
+import { Input, Button, CustomAlert } from '@components/common';
 import { useAuth } from '@context/AuthContext';
 import { deleteAccount } from '@services/userService';
 
@@ -20,84 +20,117 @@ export const DeleteAccountScreen: React.FC<{ navigation: any }> = ({ navigation 
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // 🚨 스크롤 제어용 상태
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertConfirmHandler, setAlertOnConfirm] = useState<(() => void) | undefined>(undefined);
+
+  const triggerAlert = (title: string, message: string, onConfirm: () => void) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertOnConfirm(() => onConfirm);
+    setAlertVisible(true);
+  };
+
   const handleDelete = () => {
-    Alert.alert(
-      '회원 탈퇴',
+    triggerAlert(
+      '회원 탈퇴 😢',
       '모든 데이터가 삭제되며 복구할 수 없습니다.\n정말 탈퇴하시겠습니까?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '탈퇴', style: 'destructive', onPress: async () => {
-            try {
-              setIsLoading(true);
-              await deleteAccount(isNormal ? password : undefined);
-              await logout();
-            } catch (e: any) {
-              Alert.alert('오류', e.message || '탈퇴 실패');
-              setIsLoading(false);
-            }
-          },
-        },
-      ],
+      async () => {
+        try {
+          setIsLoading(true);
+          await deleteAccount(isNormal ? password : undefined);
+          await logout();
+        } catch (e: any) {
+          triggerAlert('오류', e.message || '탈퇴 실패', () => {});
+          setIsLoading(false);
+        }
+      }
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Ionicons name="arrow-back" size={24} color="#4A3B32" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>회원 탈퇴</Text>
-        <View style={styles.headerBtn} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* 경고 카드 */}
-        <View style={styles.warningCard}>
-          <View style={styles.warningIconBg}>
-            <Ionicons name="warning-outline" size={32} color="#FF6B6B" />
-          </View>
-          <Text style={styles.warningTitle}>정말 탈퇴하시겠습니까?</Text>
-          <Text style={styles.warningDesc}>
-            {'탈퇴 시 아래 모든 데이터가\n영구적으로 삭제됩니다.'}
-          </Text>
-
-          {/* 삭제 항목 목록 */}
-          <View style={styles.deleteList}>
-            {['추억일기 (사진·영상·기록)', '약속일기 (일정·메모)', '반려동물 프로필 사진', '계정 정보'].map(item => (
-              <View key={item} style={styles.deleteItem}>
-                <Ionicons name="close-circle" size={16} color="#FF6B6B" />
-                <Text style={styles.deleteItemText}>{item}</Text>
-              </View>
-            ))}
-          </View>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* 🚨 키보드 회피 뷰 장착 */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+            <Ionicons name="arrow-back" size={24} color="#4A3B32" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>회원 탈퇴</Text>
+          <View style={styles.headerBtn} />
         </View>
 
-        {/* 비밀번호 확인 (일반 회원만) */}
-        {isNormal && (
-          <View style={styles.formCard}>
-            <Input
-              label="비밀번호 확인"
-              placeholder="현재 비밀번호를 입력해주세요"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: isInputFocused ? 400 : 40 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.warningCard}>
+            <View style={styles.warningIconBg}>
+              <Ionicons name="warning-outline" size={32} color="#FF6B6B" />
+            </View>
+            <Text style={styles.warningTitle}>정말 탈퇴하시겠습니까?</Text>
+            <Text style={styles.warningDesc}>
+              {'탈퇴 시 아래 모든 데이터가\n영구적으로 삭제됩니다.'}
+            </Text>
+
+            <View style={styles.deleteList}>
+              {['추억일기 (사진·영상·기록)', '약속일기 (일정·메모)', '반려동물 프로필 사진', '계정 정보'].map(item => (
+                <View key={item} style={styles.deleteItem}>
+                  <Ionicons name="close-circle" size={16} color="#FF6B6B" />
+                  <Text style={styles.deleteItemText}>{item}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        )}
 
-        <Button
-          title="회원 탈퇴"
-          onPress={handleDelete}
-          loading={isLoading}
-          style={styles.deleteBtn}
-        />
+          {isNormal && (
+            <View style={styles.formCard}>
+              <Input
+                label="비밀번호 확인"
+                placeholder="현재 비밀번호를 입력해주세요"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                onFocus={() => {
+                  setIsInputFocused(true);
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 300);
+                }}
+                onBlur={() => setIsInputFocused(false)}
+              />
+            </View>
+          )}
 
-        <TouchableOpacity style={styles.cancelLink} onPress={() => navigation.goBack()}>
-          <Text style={styles.cancelLinkText}>탈퇴하지 않고 돌아가기</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <Button
+            title="회원 탈퇴"
+            onPress={handleDelete}
+            loading={isLoading}
+            style={styles.deleteBtn}
+          />
+
+          <TouchableOpacity style={styles.cancelLink} onPress={() => navigation.goBack()}>
+            <Text style={styles.cancelLinkText}>탈퇴하지 않고 돌아가기</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={() => setAlertVisible(false)}
+        onConfirm={alertConfirmHandler}
+        confirmText="탈퇴하기"
+        cancelText="돌아가기"
+      />
     </SafeAreaView>
   );
 };

@@ -12,8 +12,7 @@ import { API_BASE_URL } from '../../constants/config';
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Dimensions, Image, Alert,
-  ActivityIndicator, Platform,
+  ScrollView, Dimensions, Image, ActivityIndicator, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +22,7 @@ import { FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/
 import { useAuth } from '@context/AuthContext';
 import { uploadPetPhoto } from '@services/userService';
 import { FontFamily } from '@constants/typography';
+import { CustomAlert } from '@components/common/CustomAlert'; // 🚨 커스텀 알럿 임포트
 
 const { width } = Dimensions.get('window');
 const defaultPetImage = require('../../../assets/icon.png');
@@ -47,6 +47,17 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user, updateUser } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
 
+  // 🚨 커스텀 알럿용 상태 관리
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+
+  const triggerAlert = (title: string, message: string) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertVisible(true);
+  };
+
   const greeting = useMemo(
     () => getGreeting(user?.petName ?? '', (user as any)?.regDate),
     [user?.petName, (user as any)?.regDate],
@@ -59,20 +70,14 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     return `${API_BASE_URL}/uploads${cleanPath}`;
   };
 
-  // ============================================
-  // 반려동물 프로필 사진 업로드
-  // ============================================
   const pickPetPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진첩 접근 권한이 필요합니다.');
+      triggerAlert('권한 필요', '사진첩 접근 권한이 필요합니다.');
       return;
     }
 
-    // ⚠️ Android 호환을 위해 MediaTypeOptions.Images 사용
-    // (배열 문법 ['images'] 은 일부 expo 버전에서 Android 동작 불안정)
-    const mediaTypes = (ImagePicker as any).MediaType?.Images
-      ?? ImagePicker.MediaTypeOptions.Images;
+    const mediaTypes = (ImagePicker as any).MediaType?.Images ?? ImagePicker.MediaTypeOptions.Images;
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes,
@@ -86,9 +91,9 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       try {
         const updatedUser = await uploadPetPhoto(result.assets[0].uri);
         if (updateUser) updateUser(updatedUser);
-        Alert.alert('완료', '프로필 사진이 변경되었습니다. 🐾');
+        triggerAlert('완료', '프로필 사진이 변경되었습니다. 🐾');
       } catch {
-        Alert.alert('오류', '사진 업로드에 실패했습니다.');
+        triggerAlert('오류', '사진 업로드에 실패했습니다.');
       } finally {
         setIsUploading(false);
       }
@@ -96,7 +101,6 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   };
 
   return (
-    // 🔒 bottom 제외 — 카메라/갤러리 복귀 시 inset 변동이 레이아웃에 영향 안 주도록
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -107,11 +111,7 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.cardContainer}>
           <View style={styles.springBinding}>
             {[1, 2, 3, 4, 5, 6].map(i => <View key={i} style={styles.springRing} />)}
@@ -134,104 +134,87 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
           <Text style={styles.petNameText}>{user?.petName || '반려동물'}의 일기장 📖</Text>
 
-          <View style={styles.diaryButtons}>
-            <TouchableOpacity
-              style={[styles.diaryButton, styles.memoryButton]}
-              onPress={() => navigation.navigate('Memory')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.diaryButtonText}>추억일기</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.diaryButton, styles.promiseButton]}
-              onPress={() => navigation.navigate('Promise')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.diaryButtonText}>약속일기</Text>
-            </TouchableOpacity>
+          {/* 🚨 업그레이드 코드: Idea A "오늘의 반려동물 대시보드 카드" */}
+          <View style={styles.dashboardContainer}>
+            <Text style={styles.dashboardTitle}>📋 오늘의 기록 현황</Text>
+            <View style={styles.dashboardGrid}>
+              <View style={styles.dashboardItem}>
+                <Ionicons name="images-outline" size={22} color="#FF6B6B" />
+                <Text style={styles.dashboardLabel}>기록된 추억</Text>
+                <Text style={styles.dashboardCount}>추억 가득 🐾</Text>
+              </View>
+              <View style={styles.dashboardItem}>
+                <Ionicons name="calendar-outline" size={22} color="#4FC3F7" />
+                <Text style={styles.dashboardLabel}>남은 약속</Text>
+                <Text style={styles.dashboardCount}>일정 확인 📅</Text>
+              </View>
+            </View>
+
+            {/* 임박 일정 퀵 배너 */}
+            <View style={styles.ddayBanner}>
+              <Text style={styles.ddayBadge}>D-Day</Text>
+              <Text style={styles.ddayText} numberOfLines={1}>캘린더 탭에서 소중한 약속을 관리해 보세요!</Text>
+            </View>
           </View>
 
-          <View style={styles.noteLines}>
-            {[1, 2, 3].map(i => <View key={i} style={styles.noteLine} />)}
-          </View>
-          <View style={styles.noteDecorations}>
-            <Text style={styles.noteDeco}>🐾</Text>
-            <Text style={styles.noteDeco}>💕</Text>
-            <Text style={styles.noteDeco}>📖</Text>
+          <View style={styles.diaryButtons}>
+            <TouchableOpacity style={[styles.diaryButton, styles.memoryButton]} onPress={() => navigation.navigate('Memory')} activeOpacity={0.8}>
+              <Text style={styles.diaryButtonText}>추억일기 펼치기 📷</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.diaryButton, styles.promiseButton]} onPress={() => navigation.navigate('Promise')} activeOpacity={0.8}>
+              <Text style={styles.diaryButtonText}>약속일기 펼치기 📅</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
+
+      {/* 🚨 공통 커스텀 알럿 장착 */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={() => setAlertVisible(false)}
+      />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md,
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md },
   headerLeft: { flex: 1 },
   greeting:   { fontFamily: FontFamily.diary, fontSize: 23, color: Colors.textPrimary },
-  settingsButton: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface,
-    justifyContent: 'center', alignItems: 'center', ...Shadow.sm,
-  },
+  settingsButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center', ...Shadow.sm },
   content: { flex: 1 },
-  scrollContent: {
-    flexGrow: 1, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl,
-    alignItems: 'center', paddingTop: Spacing.md,
-  },
+  scrollContent: { flexGrow: 1, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl, alignItems: 'center', paddingTop: Spacing.md },
   cardContainer: {
-    width: width - Spacing.lg * 2,
-    backgroundColor: Colors.surface, borderRadius: BorderRadius.xl,
-    paddingVertical: Spacing.xxl, paddingHorizontal: Spacing.xl,
-    alignItems: 'center', borderWidth: 1, borderColor: Colors.border, ...Shadow.md,
+    width: width - Spacing.lg * 2, backgroundColor: Colors.surface, borderRadius: BorderRadius.xl,
+    paddingVertical: Spacing.xl, paddingHorizontal: Spacing.xl, alignItems: 'center', borderWidth: 1, borderColor: '#F0EBE1', ...Shadow.md,
   },
-  springBinding: {
-    flexDirection: 'row', justifyContent: 'space-around', width: '70%',
-    marginBottom: Spacing.lg,
-  },
-  springRing: {
-    width: 8, height: 8, borderRadius: 4, backgroundColor: '#D1CCC5',
-  },
-  profileImageContainer: {
-    position: 'relative', marginBottom: Spacing.md,
-  },
-  profileImage: {
-    width: 140, height: 140, borderRadius: 70,
-    borderWidth: 4, borderColor: '#FFFFFF',
-  },
-  logoDefaultImage: {
-    width: 140, height: 140, borderRadius: 70,
-    backgroundColor: '#F0EBE1',
-  },
-  editIconBadge: {
-    position: 'absolute', bottom: 4, right: 4,
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 3, borderColor: '#FFFFFF',
-  },
-  petNameText: {
-    fontFamily: FontFamily.diary, fontSize: 22,
-    color: Colors.textPrimary, marginBottom: Spacing.xl,
-  },
-  diaryButtons: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.xl },
-  diaryButton: {
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md,
-    borderRadius: 24, ...Shadow.sm,
-  },
-  memoryButton:  { backgroundColor: '#FFB5B5' },
-  promiseButton: { backgroundColor: '#A8DADC' },
-  diaryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
+  springBinding: { flexDirection: 'row', justifyContent: 'space-around', width: '70%', marginBottom: Spacing.md },
+  springRing: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D1CCC5' },
+  profileImageContainer: { position: 'relative', marginBottom: Spacing.md },
+  profileImage: { width: 130, height: 130, borderRadius: 65, borderWidth: 4, borderColor: '#FFFFFF' },
+  logoDefaultImage: { width: 130, height: 130, borderRadius: 65, backgroundColor: '#F0EBE1' },
+  editIconBadge: { position: 'absolute', bottom: 2, right: 2, width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
+  petNameText: { fontFamily: FontFamily.diary, fontSize: 22, color: Colors.textPrimary, marginBottom: Spacing.lg },
 
-  noteLines: { width: '90%', gap: 12, marginBottom: Spacing.lg },
-  noteLine:  { height: 1, backgroundColor: '#F0EBE1' },
-  noteDecorations: {
-    flexDirection: 'row', justifyContent: 'space-around', width: '60%',
-  },
-  noteDeco: { fontSize: 18, opacity: 0.5 },
+  // 🚨 대시보드 추가 스타일
+  dashboardContainer: { width: '100%', backgroundColor: '#FDFBF7', borderRadius: 16, padding: Spacing.md, marginBottom: Spacing.xl, borderWidth: 1, borderColor: '#F0EBE1' },
+  dashboardTitle: { fontSize: 13, fontWeight: 'bold', color: '#4A3B32', marginBottom: Spacing.sm },
+  dashboardGrid: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.sm },
+  dashboardItem: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, padding: Spacing.sm, alignItems: 'center', borderWidth: 1, borderColor: '#F5F0E6' },
+  dashboardLabel: { fontSize: 11, color: '#A0938A', marginTop: 4 },
+  dashboardCount: { fontSize: 13, fontWeight: '700', color: '#4A3B32', marginTop: 2 },
+  ddayBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF5F5', padding: 8, borderRadius: 8, gap: 6, marginTop: 4 },
+  ddayBadge: { backgroundColor: '#FF6B6B', color: '#FFF', fontSize: 10, fontWeight: 'bold', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  ddayText: { fontSize: 11, color: '#A0938A', flex: 1 },
+
+  diaryButtons: { flexDirection: 'column', width: '100%', gap: Spacing.sm },
+  diaryButton: { width: '100%', height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', ...Shadow.sm },
+  memoryButton:  { backgroundColor: '#FFB5B5' },
+  promiseButton: { backgroundColor: '#81C784' }, // 따뜻한 연그린 톤 보완
+  diaryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' },
 });
 
 export default HomeScreen;

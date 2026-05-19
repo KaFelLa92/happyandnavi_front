@@ -78,45 +78,34 @@ const resolveFilename = (uri: string, kind: 'image' | 'video'): string => {
  * @param mediaType 'image' | 'video' (기본: 'image')
  * @returns 생성된 추억일기
  */
-export const createMemory = async (
-  request: CreateMemoryRequest,
-  mediaUri: string,
-  mediaType: 'image' | 'video' = 'image',
-): Promise<Memory> => {
-  try {
-    debugLog('추억일기 생성:', request.memoryDate, mediaType);
+export const createMemory = async (data: any, uri: string) => {
+  const formData = new FormData();
 
-    const formData = new FormData();
+  // 필수 값
+  formData.append('memoryDate', data.memoryDate);
 
-    // 평면 form 필드
-    formData.append('memoryDate', request.memoryDate);
-    appendIfDefined(formData, 'memoryComment', request.memoryComment);
-    appendIfDefined(formData, 'memoryWeather', request.memoryWeather);
-    appendIfDefined(formData, 'userMood', request.userMood);
-    appendIfDefined(formData, 'petMood', request.petMood);
+  // 선택 값 (값이 있을 때만 append)
+  if (data.memoryComment) formData.append('memoryComment', data.memoryComment);
+  if (data.memoryWeather) formData.append('memoryWeather', String(data.memoryWeather));
+  if (data.userMood) formData.append('userMood', String(data.userMood));
+  if (data.petMood) formData.append('petMood', String(data.petMood));
 
-    // 미디어 파일 (필드명: 'image' — 백엔드 @RequestParam 이름 유지)
-    formData.append('image', {
-      uri:  mediaUri,
-      name: resolveFilename(mediaUri, mediaType),
-      type: resolveMimeType(mediaUri, mediaType),
-    } as any);
+  // 미디어 파일 파싱
+  const filename = uri.split('/').pop() || 'media.jpg';
+  let type = 'image/jpeg';
+  if (filename.toLowerCase().endsWith('.mp4')) type = 'video/mp4';
+  else if (filename.toLowerCase().endsWith('.mov')) type = 'video/quicktime';
+  else if (filename.toLowerCase().endsWith('.png')) type = 'image/png';
 
-    const response = await postFormData<Memory>(
-      API_ENDPOINTS.MEMORY.BASE,
-      formData,
-    );
+  formData.append('image', {
+    uri: uri,
+    name: filename,
+    type: type,
+  } as any);
 
-    if (response.success && response.data) {
-      debugLog('추억일기 생성 완료:', response.data.memoryId);
-      return response.data;
-    }
-
-    throw new Error(response.message || '추억일기 등록에 실패했습니다.');
-  } catch (error: any) {
-    debugLog('추억일기 생성 실패:', error.message);
-    throw error;
-  }
+  // 전송
+  const response = await postFormData(API_ENDPOINTS.MEMORY.BASE, formData);
+  return response;
 };
 
 // ============================================
@@ -201,35 +190,18 @@ export const searchMemories = async (keyword: string): Promise<Memory[]> => {
  * 260508: mediaType 파라미터 추가 (동영상 수정 미지원 — 정책상 미디어 변경 불가)
  * ⚠️ 수정 시 미디어 파일 변경은 정책상 불가 (코멘트/날씨/기분만 수정)
  */
-export const updateMemory = async (
-  memoryId: number,
-  request: UpdateMemoryRequest,
-): Promise<Memory> => {
-  try {
-    debugLog('추억일기 수정:', memoryId);
+export const updateMemory = async (memoryId: number, data: any) => {
+  const formData = new FormData();
 
-    const formData = new FormData();
-    appendIfDefined(formData, 'memoryDate',    request.memoryDate);
-    appendIfDefined(formData, 'memoryComment', request.memoryComment);
-    appendIfDefined(formData, 'memoryWeather', request.memoryWeather);
-    appendIfDefined(formData, 'userMood',      request.userMood);
-    appendIfDefined(formData, 'petMood',       request.petMood);
+  // 수정 필드들 (값이 있을 때만 append)
+  if (data.memoryDate) formData.append('memoryDate', data.memoryDate);
+  if (data.memoryComment) formData.append('memoryComment', data.memoryComment);
+  if (data.memoryWeather) formData.append('memoryWeather', String(data.memoryWeather));
+  if (data.userMood) formData.append('userMood', String(data.userMood));
+  if (data.petMood) formData.append('petMood', String(data.petMood));
 
-    const response = await putFormData<Memory>(
-      `${API_ENDPOINTS.MEMORY.BASE}/${memoryId}`,
-      formData,
-    );
-
-    if (response.success && response.data) {
-      debugLog('추억일기 수정 완료');
-      return response.data;
-    }
-
-    throw new Error(response.message || '추억일기 수정에 실패했습니다.');
-  } catch (error: any) {
-    debugLog('추억일기 수정 실패:', error.message);
-    throw error;
-  }
+  const response = await putFormData(`${API_ENDPOINTS.MEMORY.BASE}/${memoryId}`, formData);
+  return response;
 };
 
 // ============================================

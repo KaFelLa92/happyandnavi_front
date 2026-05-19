@@ -16,7 +16,7 @@
  import { Ionicons } from '@expo/vector-icons';
  import { Colors } from '@constants/colors';
  import { FontFamily, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
- import { LoadingSpinner } from '@components/common';
+ import { LoadingSpinner, CustomAlert } from '@components/common';
  import { getMemory, deleteMemory } from '@services/memoryService';
  import { Memory } from '@types';
  import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
@@ -55,6 +55,17 @@
    const [memory, setMemory] = useState<Memory | null>(null);
    const [isLoading, setIsLoading] = useState(true);
    const [isDeleting, setIsDeleting] = useState(false);
+   const [alertVisible, setAlertVisible] = useState(false);
+   const [alertTitle, setAlertTitle] = useState('');
+   const [alertMessage, setAlertMessage] = useState('');
+   const [alertConfirmHandler, setAlertOnConfirm] = useState<(() => void) | undefined>(undefined);
+
+   const triggerAlert = (title: string, message: string, onConfirm?: () => void) => {
+        setAlertTitle(title);
+        setAlertMessage(message);
+        setAlertOnConfirm(onConfirm ? () => onConfirm : undefined);
+        setAlertVisible(true);
+      };
 
     const getImageUrl = (path?: string) => {
         if (!path) return undefined;
@@ -91,22 +102,17 @@
    };
 
    const handleDelete = () => {
-     Alert.alert('삭제', '이 추억일기를 삭제하시겠습니까?', [
-       { text: '취소', style: 'cancel' },
-       {
-         text: '삭제', style: 'destructive', onPress: async () => {
-           try {
-             setIsDeleting(true);
-             await deleteMemory(memoryId);
-             navigation.navigate('MemoryCalendar');
-           } catch (e: any) {
-             Alert.alert('오류', e.message || '삭제 실패');
-             setIsDeleting(false);
-           }
-         },
-       },
-     ]);
-   };
+       triggerAlert('추억 삭제 🗑️', '이 추억일기를 삭제하시겠습니까?\n삭제하면 복구할 수 없어요.', async () => {
+         try {
+           setIsDeleting(true);
+           await deleteMemory(memoryId);
+           navigation.navigate('MemoryCalendar');
+         } catch (e: any) {
+           triggerAlert('오류', '삭제에 실패했습니다.');
+           setIsDeleting(false);
+         }
+       });
+     };
 
    if (isLoading) return <LoadingSpinner fullScreen message="불러오는 중..." />;
 
@@ -173,6 +179,7 @@
              )}
            </View>
          </ScrollView>
+         <CustomAlert visible={alertVisible} title={alertTitle} message={alertMessage} onClose={() => setAlertVisible(false)} onConfirm={alertConfirmHandler} confirmText={alertConfirmHandler ? "삭제하기" : "확인"} />
        </SafeAreaView>
      );
    };

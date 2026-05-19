@@ -7,7 +7,7 @@
  */
 
  import { API_BASE_URL } from '../../constants/config';
- import React, { useState } from 'react';
+ import React, { useState, useRef } from 'react';
  import {
    View, Text, StyleSheet, TouchableOpacity,
    ScrollView, Alert, ActivityIndicator, Platform,
@@ -16,9 +16,10 @@
  } from 'react-native';
  import { SafeAreaView } from 'react-native-safe-area-context';
  import { Ionicons } from '@expo/vector-icons';
+ import { Video, ResizeMode } from 'expo-av';
  import { Colors } from '@constants/colors';
  import { FontFamily, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
- import { Input } from '@components/common';
+ import { Input, CustomAlert } from '@components/common';
  import { updateMemory } from '@services/memoryService';
  import { Memory } from '@types';
 
@@ -31,14 +32,37 @@ const MOOD_OPTIONS = [
   { code: 3, label: '보통', emoji: '😐' }, { code: 4, label: '나쁨', emoji: '😟' }, { code: 5, label: '매우 나쁨', emoji: '😢' },
 ];
 
+// 🚨 추가: URL 확장자 기반 동영상 판별 함수
+const isVideoUrl = (url?: string | null): boolean => {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return lower.includes('.mp4') || lower.includes('.mov') ||
+         lower.includes('.avi') || lower.includes('/video/');
+};
+
 export const MemoryEditScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
   const original: Memory = route.params.memory;
 
+  const scrollViewRef = useRef<ScrollView>(null);   // 스크롤뷰 조종용 리모컨 생성
+  const [isMemoFocused, setIsMemoFocused] = useState(false);
   const [comment, setComment] = useState(original.memoryComment || '');
   const [weather, setWeather] = useState<number | null>(original.memoryWeather ?? null);
   const [userMood, setUserMood] = useState<number | null>(original.userMood ?? null);
   const [petMood,  setPetMood]  = useState<number | null>(original.petMood ?? null);
   const [isLoading, setIsLoading] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertConfirmHandler, setAlertOnConfirm] = useState<(() => void) | undefined>(undefined);
+  const [alertCloseHandler, setAlertOnClose] = useState<(() => void) | undefined>(undefined);
+
+  const triggerAlert = (title: string, message: string, onConfirm?: () => void) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertOnConfirm(onConfirm ? () => onConfirm : undefined);
+    setAlertOnClose(onClose ? () => onClose : undefined);
+    setAlertVisible(true);
+  };
 
   const getImageUrl = (path?: string) => {
     if (!path) return undefined;
@@ -55,11 +79,9 @@ export const MemoryEditScreen: React.FC<{ navigation: any; route: any }> = ({ na
         memoryComment: comment, memoryWeather: weather ?? undefined,
         userMood: userMood ?? undefined, petMood: petMood ?? undefined,
       });
-      Alert.alert('완료', '수정되었습니다.', [
-              { text: '확인', onPress: () => navigation.navigate('MemoryCalendar') }
-            ]);
+      triggerAlert('완료', '수정되었습니다. 🐾', undefined, () => navigation.navigate('MemoryCalendar'));
     } catch (e: any) {
-      Alert.alert('오류', e.message || '수정 실패');
+      triggerAlert('오류', e.message || '수정 실패');
     } finally {
       setIsLoading(false);
     }
@@ -77,11 +99,35 @@ export const MemoryEditScreen: React.FC<{ navigation: any; route: any }> = ({ na
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* 기존 이미지 고정 표시 (수정 불가 안내) */}
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: isMemoFocused ? 400 : 80 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* 🚨 수정: 미디어 카드 (비디오/이미지 분기 처리) */}
         <View style={styles.mediaCard}>
-          <Image source={{ uri: getImageUrl(original.memoryUrl) }} style={styles.fixedImage} />
-          <View style={styles.infoBadge}><Text style={styles.infoBadgeText}>사진/영상은 수정할 수 없어요</Text></View>
+          {isVideoUrl(original.memoryUrl) ? (
+            <Video
+              source={{ uri: getImageUrl(original.memoryUrl) }}
+              style={styles.fixedImage}
+              resizeMode={ResizeMode.COVER}
+              useNativeControls
+              shouldPlay={false}
+              isLooping={false}
+            />
+          ) : (
+            <Image
+              source={{ uri: getImageUrl(original.memoryUrl) }}
+              style={styles.fixedImage}
+            />
+          )}
+
+          <View style={styles.infoBadge}>
+            <Text style={styles.infoBadgeText}>
+              {isVideoUrl(original.memoryUrl) ? '🎬 동영상 (수정 불가)' : '📷 사진 (수정 불가)'}
+            </Text>
+          </View>
         </View>
 
         <Text style={styles.sectionLabel}>날씨와 기분 수정</Text>
@@ -116,8 +162,23 @@ export const MemoryEditScreen: React.FC<{ navigation: any; route: any }> = ({ na
           </View>
         </View>
 
-        <Input label="내용 수정" value={comment} onChangeText={setComment} multiline numberOfLines={5} style={styles.memoInput} />
+        <Input
+          label="내용 수정"
+          value={comment}
+          onChangeText={setComment}
+          multiline
+          numberOfLines={5}
+          style={styles.memoInput}
+          onFocus={() => {
+              setIsMemoFocused(true); // 🚨 여백 늘리기
+              setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 300);
+            }}
+            onBlur={() => setIsMemoFocused(false)} // 🚨 입력 끝나면 여백 원상복구
+        />
       </ScrollView>
+      <CustomAlert visible={alertVisible} title={alertTitle} message={alertMessage} onClose={() => { setAlertVisible(false); alertCloseHandler?.(); setAlertOnClose(undefined); }} onConfirm={alertConfirmHandler} />
     </SafeAreaView>
   );
 };

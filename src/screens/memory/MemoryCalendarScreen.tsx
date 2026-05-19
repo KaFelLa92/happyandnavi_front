@@ -10,25 +10,24 @@
 import { API_BASE_URL } from '../../constants/config';
 import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Alert,
+  View, Text, StyleSheet, TouchableOpacity, Image, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay,
-  addMonths, subMonths, isSameDay, isToday as dateFnsIsToday, isAfter, isBefore, startOfDay,
+  addMonths, subMonths, isSameDay, isToday as dateFnsIsToday, isAfter, startOfDay,
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { FontFamily, Spacing } from '@constants/typography';
-import { LoadingSpinner } from '@components/common';
+import { LoadingSpinner, CustomAlert } from '@components/common';
 import { getCalendarData } from '@services/memoryService';
 import { MemoryCalendarItem } from '@types';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 
 const { width } = Dimensions.get('window');
 const CELL_W = (width - Spacing.lg * 2 - Spacing.lg * 2 - 10) / 7;
-// 동영상 URL → 썸네일 URI 캐시 (컴포넌트 외부)
 const thumbnailCache: Record<string, string> = {};
 
 interface CalendarDay {
@@ -94,28 +93,49 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
   const [calendarData, setCalendarData] = useState<MemoryCalendarItem[]>([]);
   const [isLoading,    setIsLoading]    = useState(true);
 
+  // 🚨 추가: 화면에 표시된 달력과 무관하게 '진짜 오늘'의 일기 상태를 저장하는 독립 State
+  const [actualTodayMemory, setActualTodayMemory] = useState<MemoryCalendarItem | null>(null);
+
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertConfirmHandler, setAlertOnConfirm] = useState<(() => void) | undefined>(undefined);
+
   const today = useMemo(() => startOfDay(new Date()), []);
   const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
 
+  const triggerAlert = (title: string, message: string, onConfirm?: () => void) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertOnConfirm(onConfirm ? () => onConfirm : undefined);
+    setAlertVisible(true);
+  };
+
+  // 🚨 로직 개선: 다른 월을 보더라도 오늘 일기 여부는 반드시 확인하도록 처리
   const loadCalendarData = useCallback(async () => {
     try {
-      const data = await getCalendarData(currentDate.getFullYear(), currentDate.getMonth() + 1);
-      setCalendarData(data);
+      const now = new Date();
+      const isCurrentMonth = currentDate.getFullYear() === now.getFullYear() && currentDate.getMonth() === now.getMonth();
+
+      if (isCurrentMonth) {
+        // 현재 달을 보고 있다면 한 번의 API 호출로 달력과 오늘 일기를 모두 세팅
+        const data = await getCalendarData(currentDate.getFullYear(), currentDate.getMonth() + 1);
+        setCalendarData(data);
+        setActualTodayMemory(data.find(item => item.day === now.getDate()) ?? null);
+      } else {
+        // 다른 달을 보고 있다면, 화면용 달력과 '진짜 이번 달(오늘 검사용)' 데이터를 병렬로 동시에 가져와서 최적화
+        const [viewMonthData, todayMonthData] = await Promise.all([
+          getCalendarData(currentDate.getFullYear(), currentDate.getMonth() + 1),
+          getCalendarData(now.getFullYear(), now.getMonth() + 1)
+        ]);
+        setCalendarData(viewMonthData);
+        setActualTodayMemory(todayMonthData.find(item => item.day === now.getDate()) ?? null);
+      }
     } catch (e) { console.error(e); }
     finally { setIsLoading(false); }
   }, [currentDate]);
 
   useFocusEffect(useCallback(() => { setIsLoading(true); loadCalendarData(); }, [loadCalendarData]));
-
-  // 오늘 작성된 추억이 있는가?
-  const todayMemory = useMemo(() => {
-    const todayDay = new Date().getDate();
-    const cur = currentDate;
-    const isShowingThisMonth = cur.getFullYear() === new Date().getFullYear()
-      && cur.getMonth() === new Date().getMonth();
-    if (!isShowingThisMonth) return null;
-    return calendarData.find(item => item.day === todayDay) ?? null;
-  }, [calendarData, currentDate]);
 
   const generateCalendarDays = (): CalendarDay[] => {
     const start = startOfMonth(currentDate);
@@ -137,14 +157,13 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
     });
     const combined = [...empty, ...days];
 
-    // 마지막 줄이 가운데 정렬되는 현상 방지! (7의 배수가 되도록 투명한 빈 칸 채우기)
     const remainder = combined.length % 7;
     if (remainder > 0) {
       const fillCount = 7 - remainder;
       for (let i = 0; i < fillCount; i++) {
         combined.push({
           date: new Date(end.getFullYear(), end.getMonth(), end.getDate() + i + 1),
-          day: -1, // 음수를 주어 화면에 숫자 없이 투명하게 렌더링되도록 함
+          day: -1,
           isCurrentMonth: false,
           isFuture: true,
         });
@@ -154,26 +173,16 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
     return combined;
   };
 
-  // ========================================
-  // 날짜 클릭 — UX 분기
-  // ========================================
   const handleDayPress = (item: CalendarDay) => {
     if (!item.isCurrentMonth) return;
+    if (item.isFuture) return;
 
-    // 1️⃣ 미래 날짜: 비활성
-    if (item.isFuture) {
-      // 살짝만 안내 (alert 까진 X)
-      return;
-    }
-
-    // 2️⃣ 추억이 있는 날: 상세로
     if (item.memory) {
       navigation.navigate('MemoryDetail', { memoryId: item.memory.memoryId });
       setSelectedDate(null);
       return;
     }
 
-    // 3️⃣ 오늘인데 추억 없음: 두 번 탭 → 작성
     if (dateFnsIsToday(item.date)) {
       const alreadySelected = selectedDate && isSameDay(item.date, selectedDate);
       if (alreadySelected) {
@@ -185,30 +194,14 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
       return;
     }
 
-    // 4️⃣ 과거 + 추억 없음: 핵심 정책 안내
-    Alert.alert(
-      '추억일기 안내 🐾',
-      '추억일기는 그 날에만 작성할 수 있어요.\n오늘의 소중한 순간을 기록해보세요!',
-      [{ text: '확인' }],
-    );
+    triggerAlert('추억일기 안내 🐾', '추억일기는 그 날에만 작성할 수 있어요.\n오늘의 소중한 순간을 기록해보세요!');
   };
 
-  // ========================================
-  // FAB 클릭 - 오늘 작성 안내
-  // ========================================
+  // 🚨 FAB 액션: 이제 무조건 진짜 오늘 일기 상태(actualTodayMemory)를 기준으로 동작!
   const handleFabPress = () => {
-    if (todayMemory) {
-      Alert.alert(
-        '오늘의 추억 🐾',
-        '오늘 작성된 추억일기가 있어요!\n다시 보시겠어요?',
-        [
-          { text: '취소', style: 'cancel' },
-          {
-            text: '보기',
-            onPress: () => navigation.navigate('MemoryDetail', { memoryId: todayMemory.memoryId }),
-          },
-        ],
-      );
+    if (actualTodayMemory) {
+      triggerAlert('오늘의 추억 🐾', '오늘 작성된 추억일기가 있어요!\n다시 보시겠어요?',
+        () => navigation.navigate('MemoryDetail', { memoryId: actualTodayMemory.memoryId }));
       return;
     }
     navigation.navigate('MemoryCreate', { date: todayStr });
@@ -222,8 +215,8 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
         <Text style={styles.headerTitle}>추억일기</Text>
       </View>
 
-      {/* 오늘 작성 안 했을 때 분기 배너 */}
-      {!todayMemory && (
+      {/* 🚨 배너: 무조건 진짜 오늘 일기 상태 기준 */}
+      {!actualTodayMemory && (
         <TouchableOpacity
           style={styles.todayBanner}
           activeOpacity={0.85}
@@ -240,7 +233,6 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
         </TouchableOpacity>
       )}
 
-      {/* 캘린더 카드 — 화면 꽉 채움 */}
       <View style={styles.calendarCard}>
         <View style={styles.monthNav}>
           <TouchableOpacity
@@ -272,7 +264,6 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
           ))}
         </View>
 
-        {/* 그리드 - flex: 1 로 남은 공간 꽉 채움 */}
         <View style={styles.calendarGrid}>
           {generateCalendarDays().map((item, idx) => {
             const isSelected = selectedDate && isSameDay(item.date, selectedDate);
@@ -315,16 +306,18 @@ export const MemoryCalendarScreen: React.FC<{ navigation: any }> = ({ navigation
         </View>
       </View>
 
-      {/* FAB - 오늘 작성 안내 */}
+      {/* 🚨 FAB: 실제 오늘 일기 유무(actualTodayMemory)에 따라 아이콘 완벽하게 고정 */}
       <TouchableOpacity style={styles.fab} onPress={handleFabPress}>
         <Ionicons
-          name={todayMemory ? 'eye' : 'add'}
+          name={actualTodayMemory ? 'eye' : 'add'}
           size={28}
           color="#FFF"
         />
       </TouchableOpacity>
+
+      <CustomAlert visible={alertVisible} title={alertTitle} message={alertMessage} onClose={() => setAlertVisible(false)} onConfirm={alertConfirmHandler} />
     </SafeAreaView>
-  );diary
+  );
 };
 
 const styles = StyleSheet.create({
@@ -332,7 +325,6 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', paddingVertical: Spacing.md, marginBottom: Spacing.xs },
   headerTitle: { fontFamily: FontFamily.diary, fontSize: 24, color: '#4A3B32' },
 
-  // 분기 배너
   todayBanner: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
     marginHorizontal: Spacing.lg, marginBottom: Spacing.sm,
@@ -347,7 +339,6 @@ const styles = StyleSheet.create({
   bannerTitle: { fontSize: 13, fontWeight: '700', color: '#4A3B32' },
   bannerSub:   { fontSize: 11, color: '#A0938A', marginTop: 2 },
 
-  // 캘린더 카드
   calendarCard: {
     flex: 1,
     marginHorizontal: Spacing.lg, marginBottom: Spacing.lg,
@@ -387,7 +378,7 @@ const styles = StyleSheet.create({
 
   dayText:        { fontSize: 14, color: '#4A3B32', fontWeight: '500' },
   inactiveDayText:{ color: '#E5DED5' },
-  futureDayText:  { color: '#E5DED5' }, // 미래는 비활성 색
+  futureDayText:  { color: '#E5DED5' },
   todayText:      { color: '#FFB5B5', fontWeight: 'bold' },
   selectedDayText:{ color: '#FFF', fontWeight: 'bold' },
 

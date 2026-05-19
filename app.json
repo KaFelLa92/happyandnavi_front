@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FAF3E0"
+      "backgroundColor": "#FDFBF7"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -26,14 +26,17 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FAF3E0"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FDFBF7"
       },
       "package": "com.happyandnavi.app",
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "scheme": "happyandnavi",
@@ -55,7 +58,22 @@
         {
           "urlScheme": "happyandnavi"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "https://devrepo.kakao.com/nexus/content/groups/public/"
+            ]
+          }
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "68ed143e-b7ea-4bc4-8891-6fec05779ddc"
+      }
+    }
   }
 }

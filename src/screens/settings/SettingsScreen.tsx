@@ -29,7 +29,9 @@ import { Colors } from '@constants/colors';
 import { FontFamily, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '@constants/typography';
 import { useAuth } from '@context/AuthContext';
 import { updateNotificationSettings, uploadPetPhoto } from '@services/userService';
-import { Card } from '@components/common';
+import { Card, CustomAlert } from '@components/common';
+import { LoadingScreen, NotFoundScreen } from '@screens/common';
+import { SplashScreen } from '@screens/auth';
 
 // ============================================
 // 컴포넌트
@@ -41,6 +43,17 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
     user?.scheduleSet === 1
   );
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertConfirmHandler, setAlertOnConfirm] = useState<(() => void) | undefined>(undefined);
+
+  const triggerAlert = (title: string, message: string, onConfirm?: () => void) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertOnConfirm(onConfirm ? () => onConfirm : undefined);
+    setAlertVisible(true);
+  };
 
   // 🚨 만능 URL 헬퍼 함수 추가 (HomeScreen과 동일)
   const getImageUrl = (path?: string) => {
@@ -57,18 +70,15 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
   // ========================================
 
   const handleNotificationToggle = async (value: boolean) => {
-    try {
-      setNotificationEnabled(value);
-      await updateNotificationSettings(value ? 1 : 0);
-
-      if (user) {
-        updateUser({ ...user, scheduleSet: value ? 1 : 0 });
+      try {
+        setNotificationEnabled(value);
+        await updateNotificationSettings(value ? 1 : 0);
+        if (user) updateUser({ ...user, scheduleSet: value ? 1 : 0 });
+      } catch (error) {
+        setNotificationEnabled(!value);
+        triggerAlert('오류', '설정 변경에 실패했습니다.');
       }
-    } catch (error) {
-      setNotificationEnabled(!value);
-      Alert.alert('오류', '설정 변경에 실패했습니다.');
-    }
-  };
+    };
 
   // ========================================
   // 프로필 사진 업로드
@@ -78,9 +88,9 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
-        return;
-      }
+            triggerAlert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
+            return;
+          }
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'], // 최신 API 적용
@@ -96,10 +106,10 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
 
       if (updatedUser) {
         updateUser(updatedUser);
-        Alert.alert('완료', '프로필 사진이 업데이트되었습니다. 🐾');
+        triggerAlert('완료', '프로필 사진이 업데이트되었습니다. 🐾');
       }
     } catch (e: any) {
-      Alert.alert('오류', e.message || '사진 업로드에 실패했습니다.');
+      triggerAlert('오류', e.message || '사진 업로드에 실패했습니다.');
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -110,14 +120,9 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
   // ========================================
 
   const handleLogout = () => {
-    Alert.alert(
-      '로그아웃',
-      '정말 로그아웃 하시겠습니까?',
-      [
-        { text: '취소', style: 'cancel' },
-        { text: '로그아웃', style: 'destructive', onPress: async () => { await logout(); } },
-      ]
-    );
+    triggerAlert('로그아웃 🐾', '정말 로그아웃 하시겠습니까?', async () => {
+      await logout();
+    });
   };
 
   const handleDeleteAccount = () => {
@@ -232,6 +237,7 @@ export const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
           <Text style={styles.appVersion}>버전 1.0.0</Text>
         </View>
       </ScrollView>
+      <CustomAlert visible={alertVisible} title={alertTitle} message={alertMessage} onClose={() => setAlertVisible(false)} onConfirm={alertConfirmHandler} confirmText={alertConfirmHandler ? (alertTitle.includes('로그아웃') ? '로그아웃' : '확인') : '확인'} />
     </SafeAreaView>
   );
 };

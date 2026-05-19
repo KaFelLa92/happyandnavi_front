@@ -21,6 +21,8 @@ import {
   signup as signupService,
   kakaoLogin as kakaoLoginService,
   googleLogin as googleLoginService,
+  naverLogin as naverLoginService,
+  appleLogin as appleLoginService,
   getUserInfo,
   saveUserInfo,
 } from '../services/authService';
@@ -40,6 +42,8 @@ interface AuthContextType extends AuthState {
   logout: () => Promise<void>;
   kakaoLogin: (accessToken: string) => Promise<void>;
   googleLogin: (idToken: string) => Promise<void>;
+  naverLogin: (accessToken: string) => Promise<void>;
+  appleLogin: (identityToken: string) => Promise<void>;
   updateUser: (user: User) => void;
   refreshAuth: () => Promise<void>;
 }
@@ -47,8 +51,12 @@ interface AuthContextType extends AuthState {
 const defaultContext: AuthContextType = {
   isAuthenticated: false, user: null, isLoading: true,
   login: async () => {}, signup: async () => ({} as User),
-  logout: async () => {}, kakaoLogin: async () => {},
-  googleLogin: async () => {}, updateUser: () => {},
+  logout: async () => {},
+  kakaoLogin: async () => {},
+  googleLogin: async () => {},
+  naverLogin: async () => {},
+  appleLogin: async () => {},
+  updateUser: () => {},
   refreshAuth: async () => {},
 };
 const AuthContext = createContext<AuthContextType>(defaultContext);
@@ -165,6 +173,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setState({ isAuthenticated: true, user: fullUser, isLoading: false });
     }, []);
 
+    // naverLogin 함수
+    const naverLogin = useCallback(async (accessToken: string) => {
+      try {
+        const response = await naverLoginService(accessToken);
+        const userInfo = await getMyInfo();
+        setState({ isAuthenticated: true, user: userInfo, isLoading: false });
+      } catch (error: any) {
+        setState(prev => ({ ...prev, isLoading: false }));
+        throw error;
+      }
+    }, []);
+
+    // appleLogin 함수
+    const appleLogin = useCallback(async (identityToken: string) => {
+      try {
+        const response = await appleLoginService(identityToken);
+        const userInfo = await getMyInfo();
+        setState({ isAuthenticated: true, user: userInfo, isLoading: false });
+      } catch (error: any) {
+        setState(prev => ({ ...prev, isLoading: false }));
+        throw error;
+      }
+    }, []);
+
   const updateUser = useCallback((user: User) => {
     saveUserInfo(user).catch(() => {});
     setState(prev => ({ ...prev, user }));
@@ -177,7 +209,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{
-      ...state, login, signup, logout, kakaoLogin, googleLogin, updateUser, refreshAuth,
+      ...state, login, signup, logout, kakaoLogin, googleLogin, naverLogin, appleLogin, updateUser, refreshAuth,
     }}>
       {children}
     </AuthContext.Provider>
